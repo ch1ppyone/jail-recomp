@@ -23,15 +23,15 @@ a rewritten game engine or a conventional emulator.
 > [!IMPORTANT]
 > **Bring your own game.** No game files, firmware, licences or translation
 > assets are included. You need your own legally obtained PKG, matching
-> licence and Vita firmware. This is a source repository: there is no prebuilt
-> app or APK to download.
+> licence and Vita firmware. Release builds contain only the app: the game
+> data is still yours to provide and is never uploaded.
 
 ## Platforms
 
 | Platform | Status | Launcher | Graphics | Input |
 | :--- | :--- | :--- | :--- | :--- |
 | **macOS** Apple Silicon | ✅ Playable start to finish | PyQt6 desktop launcher | SDL3 · Metal | Keyboard, gamepad |
-| **Android** arm64 | 🧪 Experimental: verified on emulator, not yet on real phones | First-launch file picker | SDL3 · Vulkan | Touch controls, gamepad |
+| **Android** arm64 | 🧪 Experimental: verified on a real phone (Galaxy S25 Ultra · Android 17) and the emulator | First-launch file picker | SDL3 · Vulkan | Touch controls, gamepad |
 | **Windows** | 🕓 Planned | — | — | — |
 | **Linux** | 🕓 Planned | — | — | — |
 
@@ -161,6 +161,19 @@ The Android app is built on a Mac (or Linux) from the same sources. The game
 data it needs is produced by the macOS build above, so **build the game on
 macOS first**.
 
+**Hardware status (19 November 2026):** the APK was installed and launched on
+a **Samsung Galaxy S25 Ultra (SM-S938B, Android 17, arm64)**: the game boots,
+renders its menus and story scenes at full speed, and the touch controls and
+controller input work. The same build runs on the Android emulator. Two
+device-specific details came out of that test:
+
+- Android 17's libc aborts on a destroyed mutex inside Samsung's vendor display
+  allocator when the system renderer draws the app window through Vulkan. The
+  manifest therefore disables window hardware acceleration for the app; the
+  game itself still renders through its own SDL Vulkan surface.
+- The APK checks that the game image starts with `VRIM`, so a `.pkg` or the
+  `app0` archive is rejected instead of crashing the runtime.
+
 ### Requirements
 
 - everything from the macOS section, with a completed game build;
@@ -204,12 +217,17 @@ On the first launch the app asks for three files:
 
 | Choice | File |
 | :--- | :--- |
-| Game image | `game.img` from `nativ/dump/decrypted/PCSG00615/recomp/` |
+| Game image | `game.img` from `nativ/dump/decrypted/PCSG00615/recomp/` (3.5 MB, starts with `VRIM`) |
 | Vita firmware | `PSVUPDAT.PUP` |
 | Licence | `work.bin` |
 
 The launcher checks them, copies them into the app's private storage and
 starts the game. From then on, the app goes straight to the game.
+
+The file picker does **not** replace `scripts/install_android.sh`: that script
+also copies the extracted `app0` game data and the system module images
+(`libc.img`, `libgxm_es4.img`, ...), which the game cannot run without. Run it
+once with the phone connected; the picker is only for the three user files.
 
 ### Controls
 
@@ -224,7 +242,8 @@ A Bluetooth or USB gamepad works out of the box.
   $ANDROID_HOME/emulator/emulator -avd <name> -gpu host
   ```
 
-- Real-phone performance and battery use have not been measured yet.
+- Real-phone battery use has not been measured yet; frame rate on the Galaxy
+  S25 Ultra matched the emulator during the launch and menu test.
 
 ## How it works
 
