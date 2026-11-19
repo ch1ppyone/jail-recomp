@@ -125,7 +125,12 @@ public class MainActivity extends Activity {
     static String[] gameArguments(Activity activity) {
         ArrayList<String> args = new ArrayList<>(); String base = activity.getFilesDir().getAbsolutePath();
         args.add("--base-dir"); args.add(base); args.add("--lang"); args.add("en_us");
-        args.add("--log"); args.add("1"); return args.toArray(new String[0]);
+        args.add("--log"); args.add("1");
+        // Let SDL open physical Bluetooth/USB controllers. Touch controls remain available
+        // until a controller actually sends input.
+        args.add("--gamepad");
+        args.add("--env"); args.add("RECOMP_ANDROID_NO_INTRO=1");
+        return args.toArray(new String[0]);
     }
 
     static final class Assets {

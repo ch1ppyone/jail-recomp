@@ -42,7 +42,9 @@ android {
     sourceSets.main {
         // SDLActivity and its Java glue live in the SDL3 source tree; the native library is libmain.so.
         java.srcDirs += ["${projectDir}/../third_party/sdl3-src/android-project/app/src/main/java"]
-        jniLibs.srcDirs = ["${projectDir}/src/main/jniLibs", "${buildDir}/generated/sdl3JniLibs"]
+        // SDL3 is copied by copySdl3JniLib below. Keep one source only: a stale
+        // app/src/main/jniLibs/libSDL3.so would otherwise be merged twice.
+        jniLibs.srcDirs = ["${buildDir}/generated/sdl3JniLibs"]
     }
 
     externalNativeBuild {

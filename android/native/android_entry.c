@@ -139,6 +139,12 @@ int SDL_main(int argc, char **argv) {
      * the old bring-up paths available (`am start ... --ez no_audio true`). */
     (void)audio;
     if (no_audio) setenv("RECOMP_ANDROID_NO_AUDIO", "1", 1);
+    /* Android's mixer/HAL commonly consumes roughly 1024-1088 frames at 48 kHz.  The desktop
+     * default of 256 frames is too small for that device buffer: the game can return between
+     * pulls and SDL inserts an audible underrun.  Keep two device-sized buffers queued on
+     * Android; explicit --env values still override these defaults. */
+    if (!getenv("RECOMP_AUDIO_FRAMES")) setenv("RECOMP_AUDIO_FRAMES", "1024", 1);
+    if (!getenv("RECOMP_AUDIO_QUEUE")) setenv("RECOMP_AUDIO_QUEUE", "2", 1);
     /* Off by default: the emulator exposes its keyboard as a phantom gamepad ("qwerty2"),
      * which makes the runtime auto-hide the on-screen buttons. A physical pad can be
      * enabled with `am start ... --ez gamepad true`. */

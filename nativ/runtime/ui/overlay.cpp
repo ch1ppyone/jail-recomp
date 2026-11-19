@@ -1555,9 +1555,10 @@ static void build_closed(void) {
 		pad_hint_maybe(t);   /* (HINT-01) */
 		if (!g_toast_checked) {   /* the hint, once per game, on this overlay's first windowed frame */
 			g_toast_checked = true;
-			if (!settings_has("touch_intro_shown")) {   /* the player's first game: the touch card first (it says where the menu is too) */
+			const bool android_no_intro = std::getenv("RECOMP_ANDROID_NO_INTRO") != nullptr;
+			if (!android_no_intro && !settings_has("touch_intro_shown")) {   /* the player's first game: the touch card first (it says where the menu is too) */
 				g_intro = true; g_paused = true; apply_pause();   /* (HINT-01: the start hint still comes once, at the next start -- it was marked shown here, and never came) */
-			} else if (!settings_has("menu_hint_shown")) { g_toast_until = t + TOAST_S; menu_hint_toast(); settings_set_int("menu_hint_shown", 1); save_settings(); }
+			} else if (!android_no_intro && !settings_has("menu_hint_shown")) { g_toast_until = t + TOAST_S; menu_hint_toast(); settings_set_int("menu_hint_shown", 1); save_settings(); }
 		}
 		const ImVec2 m = io.MousePos;
 		const bool inside = ImGui::IsMousePosValid(&m) && m.x >= 0 && m.x < w && m.y >= 0 && m.y < hgt;   /* (focused but outside the window, e.g. on the title bar: the backend reports a position there too) */
