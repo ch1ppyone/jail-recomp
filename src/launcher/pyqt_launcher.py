@@ -841,10 +841,14 @@ class Launcher(QMainWindow):
         self.volume.valueChanged.connect(self.persist)
         self.fullscreen = QCheckBox("Fullscreen")
         self.fullscreen.stateChanged.connect(self.persist)
+        self.toasts = QCheckBox("On-screen messages (shaders, trophies, input hints)")
+        self.toasts.setToolTip("Off by default in the desktop build. The same switch is in the game's menu: F10 → Game.")
+        self.toasts.stateChanged.connect(self.persist)
         for row, widget in enumerate((self.resolution, self.fps, self.fit,
                                       self.aspect, self.osd, self.volume)):
             grid.addWidget(widget, row, 1)
         grid.addWidget(self.fullscreen, 6, 1)
+        grid.addWidget(self.toasts, 7, 1)
         grid.setColumnStretch(1, 1)
         display_layout.addSpacing(14)
         display_layout.addLayout(grid)
@@ -959,6 +963,7 @@ class Launcher(QMainWindow):
         index = self.osd.findData(number("osd", 0))
         self.osd.setCurrentIndex(index if index >= 0 else 0)
         self.fullscreen.setChecked(number("fullscreen", 0) != 0)
+        self.toasts.setChecked(number("toasts", 0) != 0)
         try:
             volume = float(values.get("volume", 1.0))
         except ValueError:
@@ -977,6 +982,7 @@ class Launcher(QMainWindow):
             "aspect_ratio": self.aspect.currentData() or "native",
             "osd": self.osd.currentData() or 0,
             "fullscreen": 1 if self.fullscreen.isChecked() else 0,
+            "toasts": 1 if self.toasts.isChecked() else 0,
             "volume": round(self.volume.value() / 100, 2),
         })
         self.update_status("Display settings saved for the next start.")

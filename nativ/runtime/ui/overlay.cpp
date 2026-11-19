@@ -422,6 +422,7 @@ static void slider_row(const char *id, float *v, float lo, float hi, const char 
 	ImGui::SetNextItemWidth(-FLT_MIN);
 	ui::slider_float(id, v, lo, hi, fmt, fl);
 }
+static int toasts_default(void);   /* (defined with the toast stack, below: the Game page's toggle) */
 static void page_display(void) {
 	if (!ui::rows_begin("display")) return;
 	ui::row(ui_tr("display.resolution"), ui_tr("display.resolution_help"), note_int("render_scale", gfx_gpu_render_scale_wanted(), ui_tr("mark.next_scene")));
@@ -625,6 +626,8 @@ static void page_game(void) {
 			ImGui::SetNextItemWidth(-FLT_MIN); ImGui::InputText("##srv", srv, sizeof srv); if (ImGui::IsItemDeactivatedAfterEdit()) { settings_set_str("private_server", srv); save_settings(); }
 		}
 	}
+	ui::row(ui_tr("game.toasts"), ui_tr("game.toasts_help"), note_int("toasts", toasts_default()));
+	{ bool on = settings_int("toasts", toasts_default()) != 0; if (ui::toggle("tst", &on)) { settings_set_int("toasts", on ? 1 : 0); save_settings(); } }
 	ui::row(ui_tr("game.volume"), nullptr, note_flt("volume", P.vol));
 	{ float pct = P.vol * 100.0f; ImGui::SetNextItemWidth(-FLT_MIN); if (ui::slider_float("##vol", &pct, 0.0f, 100.0f, "%.0f%%")) set_volume(pct / 100.0f); }
 	ui::rows_end();
@@ -1020,6 +1023,16 @@ static float g_tab_a;                   /* the pull tab's alpha */
 static double g_toast_until = -1e9; static bool g_toast_checked;   /* the first-launch menu hint's end (the pull tab shows with it) */
 /* the toasts: badges at the top right, newest on top (overlay_toast_titled: posted by any thread, taken in by the next frame) */
 struct Toast { char title[48]; char body[224]; double start, until; };
+/* On-screen messages (shader prep, trophies, input hints): off by default in the desktop
+   builds, on by default on Android. The Game page's toggle writes the "toasts" key. */
+static int toasts_default(void) {
+#ifdef __ANDROID__
+	return 1;
+#else
+	return 0;
+#endif
+}
+static int toasts_enabled(void) { return settings_int("toasts", toasts_default()) != 0; }
 static Toast g_toasts[3]; static int g_ntoasts;
 static Toast g_toast_q[8]; static int g_toast_qn; static std::mutex g_toast_mx;
 static double g_idle_since; static ImVec2 g_last_mouse(-1, -1);
@@ -1175,6 +1188,7 @@ static void build_tab(float w, double t) {
 }
 extern "C" void overlay_touch_cursor(int on) { g_touch_cursor = on != 0; }
 extern "C" void overlay_toast_titled(const char *title, const char *body, double seconds) {
+	if (!toasts_enabled()) return;
 	std::lock_guard<std::mutex> l(g_toast_mx);
 	if (g_toast_qn == 8) { std::memmove(g_toast_q, g_toast_q + 1, sizeof g_toast_q[0] * 7); g_toast_qn--; }   /* (a burst: the oldest unseen goes) */
 	Toast &q = g_toast_q[g_toast_qn++];
@@ -1582,7 +1596,7 @@ static void build_closed(void) {
 			const bool android_no_intro = std::getenv("RECOMP_ANDROID_NO_INTRO") != nullptr;
 			if (!android_no_intro && !settings_has("touch_intro_shown")) {   /* the player's first game: the touch card first (it says where the menu is too) */
 				g_intro = true; g_paused = true; apply_pause();   /* (HINT-01: the start hint still comes once, at the next start -- it was marked shown here, and never came) */
-			} else if (!android_no_intro && !settings_has("menu_hint_shown")) { g_toast_until = t + TOAST_S; menu_hint_toast(); settings_set_int("menu_hint_shown", 1); save_settings(); }
+			} else if (!android_no_intro && toasts_enabled() && !settings_has("menu_hint_shown")) { g_toast_until = t + TOAST_S; menu_hint_toast(); settings_set_int("menu_hint_shown", 1); save_settings(); }
 		}
 		const ImVec2 m = io.MousePos;
 		const bool inside = ImGui::IsMousePosValid(&m) && m.x >= 0 && m.x < w && m.y >= 0 && m.y < hgt;   /* (focused but outside the window, e.g. on the title bar: the backend reports a position there too) */

@@ -70,6 +70,8 @@
  *   audio_buffers window.c    1..4 (default 1)          buffers an audio port may queue ahead (latency vs. crackle; RECOMP_AUDIO_QUEUE wins)
  *   menu_hint_shown  overlay.cpp  1 once the first-launch hint ("move the mouse to the top for the
  *                             menu") has been shown; absent: show it on this game's next windowed run
+ *   toasts        overlay.cpp  0 | 1 (default 0 on macOS/Windows, 1 on Android)  the top-right notices
+ *                             (shader preparation, trophies, input hints); the Game page's toggle
  *
  * The in-game overlay (host/overlay.cpp: the full menu on F10, Escape, Back+Start or Guide in
  * window.c, and the menu bar at the top edge) writes all of these; F2 also writes render_scale.

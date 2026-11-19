@@ -121,6 +121,10 @@ toolchain (SDL3, SPIRV-Cross, FFmpeg).
 If your files are elsewhere, use **Browse** in the launcher: it checks the
 files and copies them into `data/`.
 
+Shader, trophy and input notifications are off by default on macOS and
+Windows. Turn them back on in **Display → On-screen messages**, or in the game
+under **F10 → Game → On-screen messages**.
+
 ### Launcher pages
 
 | Page | What it does |
@@ -128,7 +132,7 @@ files and copies them into `data/`.
 | **Home** | File check, build status, Prepare & Play / Play JAIL |
 | **Game Data** | PKG, licence and firmware status; Browse and re-check |
 | **Controls** | Keyboard bindings |
-| **Display** | Resolution, frame rate, picture fit, aspect ratio, volume |
+| **Display** | Resolution, frame rate, picture fit, aspect ratio, volume, on-screen messages |
 | **Settings** | Optional system log, local folders, licence notices |
 
 <details>
