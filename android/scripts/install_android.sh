@@ -10,9 +10,9 @@
 #                                             libfios2.img, libpvf.img, libult.img, libSceFt2.img
 #   /data/user/0/dev.ch1ppy.jail/files/fs/app0/...
 #
-# The module images are REQUIRED. Without them every import that a game module exports
-# (operator new, libult, libgxm, PVF/Ft2, fios) is a stub returning 0: the game renders one
-# frame and then loops on null callbacks instead of reaching the title screen.
+# The APK already bundles these module images and game.img. This script re-copies them
+# over ADB for development, together with an already decrypted app0, so a local test
+# skips the on-device PKG preparation.
 #
 # `run-as` works because the app is debuggable; the streams avoid a second copy in /data/local/tmp.
 set -euo pipefail

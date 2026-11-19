@@ -171,8 +171,9 @@ device-specific details came out of that test:
   allocator when the system renderer draws the app window through Vulkan. The
   manifest therefore disables window hardware acceleration for the app; the
   game itself still renders through its own SDL Vulkan surface.
-- The APK checks that the game image starts with `VRIM`, so a `.pkg` or the
-  `app0` archive is rejected instead of crashing the runtime.
+- The APK validates the selected PKG before decrypting it: the container magic,
+  the PFS signatures and the matching `work.bin` are checked, so a wrong file
+  or licence is reported instead of crashing the runtime.
 
 ### Requirements
 
@@ -233,7 +234,7 @@ have a locally decrypted `app0` and prefer the ADB route.
 
 ### Controls
 
-On-screen buttons appear on the first touch and hide when a gamepad is used.
+On-screen buttons are visible from launch and hide when a gamepad is used.
 A Bluetooth or USB gamepad works out of the box.
 
 ### Tips
@@ -244,8 +245,8 @@ A Bluetooth or USB gamepad works out of the box.
   $ANDROID_HOME/emulator/emulator -avd <name> -gpu host
   ```
 
-- Real-phone battery use has not been measured yet; frame rate on the Galaxy
-  S25 Ultra matched the emulator during the launch and menu test.
+- The game was played through to the end on the Galaxy S25 Ultra; battery use
+  has not been measured yet.
 
 ## How it works
 
@@ -254,7 +255,8 @@ A Bluetooth or USB gamepad works out of the box.
 </p>
 
 1. **Your files** — the PKG, licence and firmware stay on your machine.
-2. **Prepare** — the package is decrypted and the Vita system libraries are
+2. **Prepare** — the package is decrypted (by the macOS launcher during setup,
+   or by the Android app on first launch) and the Vita system libraries are
    rebuilt from your firmware.
 3. **Recompile** — the game's ARMv7 code is analysed and translated to C, one
    function at a time.
@@ -275,6 +277,8 @@ game is stored in this repository.
 | Very slow rendering on macOS | The native toolchain is missing; run the launcher again so it can build it |
 | Android: `libSDL3.so not found` | Rebuild with `scripts/build_android.sh` |
 | Android: black screen after start | Run the in-app installer again (or delete the app data and reinstall) |
+| Android: `work.bin does not match this PKG` | Use the licence that belongs to this exact package; a licence from another edition or region is rejected |
+| Android: `the selected file is not a Vita PKG` | Select the retail `.pkg` itself, not a zip, ISO or extracted folder |
 | Want a fresh start | Delete `nativ/dump/` to decrypt and rebuild from scratch |
 
 To report a problem, enable **Settings → Write system log** and attach
