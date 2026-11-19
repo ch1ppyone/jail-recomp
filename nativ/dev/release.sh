@@ -1,6 +1,6 @@
 #!/bin/bash
 # release.sh <tag> <os>...: a release's downloads, made on this machine in build/release/<tag>/. For each OS named:
-#   mac      ProjectNativ-<tag>-mac.dmg: Project Nativ.app (dev/macos-install.sh) beside a link to Applications, the
+#   mac      JAIL-<tag>-mac.dmg: Tokyo Ghoul JAIL.app (dev/macos-install.sh) beside a link to Applications, the
 #            player drags one onto the other; made on a Mac
 #   windows  ProjectNativ-<tag>-windows.zip, one ProjectNativ folder inside (dev/windows-install.sh; on macOS or Linux)
 #   linux    ProjectNativ-<tag>-linux.AppImage: the install (dev/linux-install.sh) as one file the player marks
@@ -64,7 +64,7 @@ for os in "$@"; do
   case $os in
     mac)
       [[ $(uname) == Darwin ]] || { echo "release.sh: the Mac install is made on a Mac"; exit 1; }
-      bash "$H/macos-install.sh" "$W"; APP="$W/Project Nativ.app"; Z=$OUT/ProjectNativ-$TAG-mac.dmg; rm -f "$Z"
+      bash "$H/macos-install.sh" "$W"; APP="$W/Tokyo Ghoul JAIL.app"; Z=$OUT/JAIL-$TAG-mac.dmg; rm -f "$Z"
       if [[ -n ${NATIV_SIGN_ID:-} ]]; then
         ENT=$W/entitlements.plist   # (Python loads its own modules' libraries; a game may use this Mac's camera)
         printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -74,7 +74,7 @@ for os in "$@"; do
           t=$(file -b "$f"); [[ $t == Mach-O* ]] || continue
           if [[ $t == *executable* ]]; then sign --entitlements "$ENT" "$f"; else sign "$f"; fi >/dev/null 2>&1 || { echo "release.sh: signing $f failed"; sign "$f"; exit 1; }
           n=$((n + 1))
-        done < <(find "$APP/Contents/Resources" "$APP/Contents/MacOS" -type f ! -path "$APP/Contents/MacOS/Project Nativ" -print0)
+        done < <(find "$APP/Contents/Resources" "$APP/Contents/MacOS" -type f ! -path "$APP/Contents/MacOS/Tokyo Ghoul JAIL" -print0)
         sign --entitlements "$ENT" "$APP"; codesign --verify --strict --deep "$APP"; echo "signed: $n libraries and programs, and the app"
         if [[ -n ${NATIV_NOTARY_PROFILE:-} ]]; then
           ditto -c -k --keepParent "$APP" "$W/app.zip"
@@ -82,8 +82,8 @@ for os in "$@"; do
           xcrun stapler staple -q "$APP"
         fi
       fi
-      mkdir -p "$W/dmg"; ditto "$APP" "$W/dmg/Project Nativ.app"; ln -s /Applications "$W/dmg/Applications"
-      hdiutil create -quiet -volname "Project Nativ" -srcfolder "$W/dmg" -ov -format UDZO "$Z"
+      mkdir -p "$W/dmg"; ditto "$APP" "$W/dmg/Tokyo Ghoul JAIL.app"; ln -s /Applications "$W/dmg/Applications"
+      hdiutil create -quiet -volname "Tokyo Ghoul JAIL" -srcfolder "$W/dmg" -ov -format UDZO "$Z"
       if [[ -n ${NATIV_SIGN_ID:-} ]]; then
         codesign --force --timestamp --sign "$NATIV_SIGN_ID" "$Z"
         if [[ -n ${NATIV_NOTARY_PROFILE:-} ]]; then
@@ -126,5 +126,5 @@ PY
   echo "$Z ($(du -h "$Z" | cut -f1))"
 done
 
-(cd "$OUT" && rm -f SHA256SUMS && shopt -s nullglob && sha ProjectNativ-"$TAG"-*.{zip,dmg,AppImage} > SHA256SUMS && cat SHA256SUMS)
-echo "to publish: gh release create $TAG $OUT/ProjectNativ-$TAG-*.{zip,dmg,AppImage} $OUT/SHA256SUMS --repo ${NATIV_RELEASES:-<owner>/<repo>} --title \"Project Nativ $TAG\" --notes-file <notes.md>"
+(cd "$OUT" && rm -f SHA256SUMS && shopt -s nullglob && sha ProjectNativ-"$TAG"-*.{zip,AppImage} JAIL-"$TAG"-*.dmg > SHA256SUMS && cat SHA256SUMS)
+echo "to publish: gh release create $TAG $OUT/ProjectNativ-$TAG-*.{zip,AppImage} $OUT/JAIL-$TAG-*.dmg $OUT/SHA256SUMS --repo ${NATIV_RELEASES:-<owner>/<repo>} --title \"Tokyo Ghoul: JAIL $TAG\" --notes-file <notes.md>"

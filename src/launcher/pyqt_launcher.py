@@ -30,12 +30,30 @@ from PyQt6.QtWidgets import (
 
 TITLE = "PCSG00615"
 CONTENT_ID = "JP0700-PCSG00615_00-TOKYOGHOUL000001"
-ROOT = Path(__file__).resolve().parents[2]
-NATIV = ROOT / "nativ"
-DATA_DIR = ROOT / "data"
-LOG_PATH = ROOT / "logs" / "launcher.log"
+
+# Two modes:
+#   * from the repository: tools in nativ/, user files in data/, builds in nativ/dump/;
+#   * from the packaged macOS app: everything shipped is in Contents/Resources,
+#     while the player's files, logs and builds live under Application Support.
+APP_RESOURCES = os.environ.get("JAIL_APP_RESOURCES")
+APP_MODE = bool(APP_RESOURCES)
+if APP_MODE:
+    NATIV = Path(APP_RESOURCES).resolve()
+    ROOT = NATIV
+    LIBRARY = Path.home() / "Library" / "Application Support" / "TokyoGhoulJAIL" / "JAIL"
+    DATA_DIR = LIBRARY / "data"
+    LOG_PATH = LIBRARY / "logs" / "launcher.log"
+    DUMP = Path(os.environ.get("ATIV_DUMP", LIBRARY / "dump")).expanduser()
+    TOOLCHAIN = Path(os.environ.get("ATIV_MAC_TOOLCHAIN", NATIV / "toolchain"))
+else:
+    ROOT = Path(__file__).resolve().parents[2]
+    NATIV = ROOT / "nativ"
+    DATA_DIR = ROOT / "data"
+    LOG_PATH = ROOT / "logs" / "launcher.log"
+    DUMP = Path(os.environ.get("ATIV_DUMP", NATIV / "dump")).expanduser()
+    TOOLCHAIN = Path(os.environ.get("ATIV_MAC_TOOLCHAIN", Path.home() / "toolchains" / "ativ-mac"))
+
 PIPELINE = NATIV / "pipeline" / "vitarecomp.py"
-DUMP = Path(os.environ.get("ATIV_DUMP", NATIV / "dump")).expanduser()
 GAME_DIR = DUMP / "decrypted" / TITLE
 RECOMP_DIR = GAME_DIR / "recomp"
 GAME_EXE = RECOMP_DIR / ("game_host.exe" if os.name == "nt" else "game_host")
@@ -238,6 +256,8 @@ class IniFile:
 
 
 def shared_settings_path() -> Path:
+    if APP_MODE:
+        return LIBRARY / "settings.ini"
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "ProjectNativ" / "Nativ" / "settings.ini"
     if os.name == "nt":
@@ -1181,7 +1201,8 @@ class Launcher(QMainWindow):
         env = QProcessEnvironment.systemEnvironment()
         env.insert("ATIV_DUMP", str(DUMP))
         env.insert("ATIV_PACKS", str(NATIV / "packs"))
-        env.insert("ATIV_MAC_TOOLCHAIN", os.environ.get("ATIV_MAC_TOOLCHAIN", str(Path.home() / "toolchains" / "ativ-mac")))
+        env.insert("ATIV_MAC_TOOLCHAIN", str(TOOLCHAIN))
+        env.insert("RECOMP_SETTINGS_SHARED", str(shared_settings_path()))
         env.insert("PYTHONUNBUFFERED", "1")
         return env
 
@@ -1285,8 +1306,8 @@ class Launcher(QMainWindow):
             self.update_status("Native build not found. Prepare & Play again.")
             return
         env_keys = {"ATIV_DUMP": str(DUMP), "ATIV_PACKS": str(NATIV / "packs"),
-                    "ATIV_MAC_TOOLCHAIN": os.environ.get("ATIV_MAC_TOOLCHAIN",
-                                                         str(Path.home() / "toolchains" / "ativ-mac"))}
+                    "ATIV_MAC_TOOLCHAIN": str(TOOLCHAIN),
+                    "RECOMP_SETTINGS_SHARED": str(shared_settings_path())}
         previous = {key: os.environ.get(key) for key in env_keys}
         os.environ.update(env_keys)
         try:

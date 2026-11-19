@@ -86,7 +86,7 @@ game: all three are needed.
 
 ### Requirements
 
-- Mac with Apple Silicon, macOS 11 or newer;
+- Mac with Apple Silicon, macOS 12 or newer;
 - Apple Command Line Tools (`xcode-select --install`);
 - Python 3 with `venv`;
 - [Homebrew](https://brew.sh) — recommended, used to install missing `cmake`
@@ -108,18 +108,22 @@ toolchain (SDL3, SPIRV-Cross, FFmpeg).
    └── PSVUPDAT.PUP
    ```
 
-2. Start the launcher from the repository root:
+2. Start the launcher:
 
-   ```sh
-   ./JAIL-PyQt.command
-   ```
+   - from the repository: `./JAIL-PyQt.command`;
+   - from the release: open **Tokyo Ghoul JAIL.app**.
+
+   Both run the same PyQt6 launcher. The packaged app keeps your files, logs
+   and builds in `~/Library/Application Support/TokyoGhoulJAIL/JAIL`.
 
 3. Press **PREPARE & PLAY**. The first run decrypts your copy, recompiles the
    game and builds it, which takes a while. After that the button becomes
    **PLAY JAIL** and the game starts right away.
 
 If your files are elsewhere, use **Browse** in the launcher: it checks the
-files and copies them into `data/`.
+files and copies them into the launcher's data folder (`data/` in the
+repository, or `~/Library/Application Support/TokyoGhoulJAIL/JAIL/data` in the
+packaged app).
 
 Shader, trophy and input notifications are off by default on macOS and
 Windows. Turn them back on in **Display → On-screen messages**, or in the game
@@ -211,11 +215,11 @@ update must carry the same signature.
 
 ```sh
 cd android
-scripts/release_apk.sh v0.1.1
+scripts/release_apk.sh v0.1.2
 ```
 
 The script builds `assembleRelease`, verifies the signature, stages
-`nativ/build/release/v0.1.1/JAIL-v0.1.1-android-arm64.apk` and writes its
+`nativ/build/release/v0.1.2/JAIL-v0.1.2-android-arm64.apk` and writes its
 SHA-256. `versionCode` and `versionName` live in `android/app/build.gradle`.
 
 An APK signed with a different key (for example an older debug build) cannot
