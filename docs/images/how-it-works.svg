@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" role="img" aria-labelledby="title desc">
+  <title id="title">Tokyo Ghoul: JAIL Recompiled — shared runtime and platform builds</title>
+  <desc id="desc">User-owned Vita inputs are prepared by platform launchers, consumed by shared generated game code and runtime, then built into macOS and Android hosts.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#08070a"/><stop offset="1" stop-color="#16080d"/></linearGradient>
+    <linearGradient id="red" x1="0" x2="1"><stop stop-color="#d21432"/><stop offset="1" stop-color="#7d000f"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#d21432"/></marker>
+    <style>
+      .k{font:700 12px Arial,sans-serif;letter-spacing:3px;fill:#c8102e}.h{font:700 40px Georgia,serif;fill:#f0eadf}.s{font:14px Arial,sans-serif;fill:#9b9084}.t{font:700 18px Arial,sans-serif;fill:#ece5d9}.b{font:13px Arial,sans-serif;fill:#a89d90}.n{font:12px Arial,sans-serif;fill:#6b625a}
+    </style>
+  </defs>
+  <rect width="1200" height="920" fill="url(#bg)"/><rect width="1200" height="4" fill="url(#red)"/>
+  <text x="70" y="64" class="k">ARCHITECTURE</text><text x="70" y="115" class="h">How it works</text>
+  <text x="70" y="147" class="s">One shared game/runtime core. Two native platform hosts.</text>
+
+  <text x="70" y="205" class="k">01 · USER INPUTS</text>
+  <g><rect x="70" y="225" width="320" height="96" rx="4" fill="#0d0b0e" stroke="#392027"/><text x="94" y="260" class="t">macOS inputs</text><text x="94" y="285" class="b">PKG · work.bin / .rif · PSVUPDAT.PUP</text><text x="94" y="305" class="n">selected or placed in data/</text>
+  <rect x="440" y="225" width="320" height="96" rx="4" fill="#0d0b0e" stroke="#392027"/><text x="464" y="260" class="t">Android first launch</text><text x="464" y="285" class="b">game.img · PSVUPDAT.PUP · work.bin</text><text x="464" y="305" class="n">picked through the native launcher</text>
+  <rect x="810" y="225" width="320" height="96" rx="4" fill="#0d0b0e" stroke="#392027"/><text x="834" y="260" class="t">Developer assets</text><text x="834" y="285" class="b">game.img · module images · app0</text><text x="834" y="305" class="n">generated locally; never committed</text></g>
+  <path d="M600 325v55" stroke="#d21432" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <text x="70" y="380" class="k">02 · PREPARE</text>
+  <g><rect x="70" y="400" width="320" height="104" rx="4" fill="#0d0b0e" stroke="#392027"/><text x="94" y="437" class="t">Validate</text><text x="94" y="463" class="b">content ID · licence · PUP header</text><text x="94" y="486" class="n">platform launcher checks local inputs</text>
+  <rect x="440" y="400" width="320" height="104" rx="4" fill="#0d0b0e" stroke="#392027"/><text x="464" y="437" class="t">Prepare</text><text x="464" y="463" class="b">decrypt package · import firmware</text><text x="464" y="486" class="n">produce app0 and runtime images</text>
+  <rect x="810" y="400" width="320" height="104" rx="4" fill="#0d0b0e" stroke="#392027"/><text x="834" y="437" class="t">Generate</text><text x="834" y="463" class="b">ARMv7 game code → native C</text><text x="834" y="486" class="n">shared generated sources in nativ/</text></g>
+  <path d="M600 508v55" stroke="#d21432" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <text x="70" y="565" class="k">03 · SHARED CORE</text>
+  <rect x="70" y="585" width="1060" height="108" rx="4" fill="#0d0b0e" stroke="#b00018"/>
+  <text x="100" y="625" class="h" font-size="26">Generated game C + Vita-compatible runtime</text>
+  <text x="100" y="657" class="b">graphics · audio · input · files · saves · timing · system modules</text>
+  <text x="100" y="678" class="n">same game/runtime layer is consumed by both platform builds</text>
+
+  <path d="M600 697v47M600 744H330v36M600 744h270v36" fill="none" stroke="#d21432" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="70" y="770" class="k">04 · NATIVE HOSTS</text>
+  <g><rect x="70" y="790" width="500" height="90" rx="4" fill="url(#red)"/><text x="320" y="828" fill="#fff" font-family="Georgia,serif" font-size="25" text-anchor="middle" font-weight="700">macOS Apple Silicon</text><text x="320" y="854" fill="#ffd9de" font-family="Arial,sans-serif" font-size="13" text-anchor="middle">PyQt6 launcher · SDL_GPU / Metal · arm64</text>
+  <rect x="630" y="790" width="500" height="90" rx="4" fill="url(#red)"/><text x="880" y="828" fill="#fff" font-family="Georgia,serif" font-size="25" text-anchor="middle" font-weight="700">Android arm64</text><text x="880" y="854" fill="#ffd9de" font-family="Arial,sans-serif" font-size="13" text-anchor="middle">Activity launcher · SDL_GPU / Vulkan · APK</text></g>
+</svg>

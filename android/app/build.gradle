@@ -1,0 +1,91 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The Android project consumes the desktop runtime and the generated game code. Override any of
+// these with the matching environment variable when your checkout lives elsewhere.
+def nativRoot = System.getenv('NATIV_ROOT') ?: new File(projectDir, '../../nativ').canonicalPath
+def gameRecompDir = System.getenv('GAME_RECOMP_DIR') ?: new File(nativRoot, 'dump/decrypted/PCSG00615/recomp').canonicalPath
+def sdl3Root = System.getenv('SDL3_ROOT') ?: new File(projectDir, '../third_party/sdl3-android').canonicalPath
+def ffmpegRoot = System.getenv('FFMPEG_ROOT') ?: new File(projectDir, '../third_party/ffmpeg-android').canonicalPath
+
+android {
+    namespace 'dev.ch1ppy.jail'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+
+    defaultConfig {
+        applicationId 'dev.ch1ppy.jail'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1-android'
+
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_shared',
+                        '-DANDROID_PLATFORM=android-26',
+                        '-DCMAKE_BUILD_TYPE=Release',
+                        "-DNATIV_ROOT=${nativRoot}",
+                        "-DGAME_RECOMP_DIR=${gameRecompDir}",
+                        "-DSDL3_ROOT=${sdl3Root}",
+                        "-DFFMPEG_ROOT=${ffmpegRoot}"
+                abiFilters 'arm64-v8a'
+            }
+        }
+    }
+
+    sourceSets.main {
+        // SDLActivity and its Java glue live in the SDL3 source tree; the native library is libmain.so.
+        java.srcDirs += ["${projectDir}/../third_party/sdl3-src/android-project/app/src/main/java"]
+        jniLibs.srcDirs = ["${projectDir}/src/main/jniLibs", "${buildDir}/generated/sdl3JniLibs"]
+    }
+
+    externalNativeBuild {
+        cmake {
+            path '../native/CMakeLists.txt'
+            version '3.31.6'
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            jniDebuggable true
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // libmain.so and libSDL3.so are loaded through an absolute path in SDLActivity; keep them
+    // extracted into nativeLibraryDir rather than mapped straight from the APK.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    lint {
+        abortOnError = false
+    }
+}
+
+// SDLActivity loads libSDL3.so before libmain.so, so every APK must package it. Plain Gradle
+// builds would otherwise succeed without it and fail at launch with "libSDL3.so not found".
+def copySdl3 = tasks.register('copySdl3JniLib', Copy) {
+    def sdl3Lib = file("${sdl3Root}/lib/libSDL3.so")
+    doFirst {
+        if (!sdl3Lib.isFile()) {
+            throw new GradleException("libSDL3.so not found at ${sdl3Lib}. Run scripts/build_sdl3_android.sh or set SDL3_ROOT.")
+        }
+    }
+    from sdl3Lib
+    into "${buildDir}/generated/sdl3JniLibs/arm64-v8a"
+}
+tasks.named('preBuild') { dependsOn copySdl3 }

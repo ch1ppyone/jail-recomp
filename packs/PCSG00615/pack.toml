@@ -1,0 +1,28 @@
+# Tokyo Ghoul: JAIL (PCSG00615, Japan) — JAIL Recompiled pack.
+#
+# Status: builds and boots on macOS arm64; the headless probe reaches the
+# title/menu, and the short smoke test reaches frame 600. Story scenes and
+# combat still need a manual clean-tree playthrough.
+#
+# Started life as `vitarecomp pack-init` output; the boot probe below comes
+# from the original development runs.
+NAME = "東京喰種トーキョーグール JAIL"
+REGION = "JP"
+ELF = "eboot.bin.elf"
+# GXM + GPU services from the firmware; libc/libfios2/libult from the game's
+# own sce_module/; PVF + FreeType for text.
+# libface and libsmart ship in sce_module/ but the game imports neither.
+MODULES = "libc libgxm_es4 libgpu_es4 libfios2 libpvf libult libSceFt2"
+# Headless probes: 600 frames = save notice; +1200 = title; 2400 = main menu
+# when the local input script is used. The launcher's short smoke test uses 600.
+TEST_FRAMES = 2400
+# circle (0x2000) dismisses the save notice, then the title's "PUSH ANY KEY",
+# then picks New Game on the menu
+TEST_INPUT = "240-260:2000,1900-1920:2000,2150-2170:2000"
+# The game's own pause menu (Start) stays; the host's settings overlay does not
+# open: the JAIL launcher owns display, controls and diagnostics.
+RUN_ENV = "RECOMP_GAME_LANG=en_us RECOMP_NO_MENU=1"
+
+[versions."1.00"]
+sha256 = "09f2347a746318beafbacd2b2b4a143006587d3838e18773662b5552aee8c70e"
+status = "recommended"

@@ -1,0 +1,19 @@
+# Android SDK / Gradle
+local.properties
+.gradle/
+.idea/
+*.iml
+build/
+app/build/
+app/.cxx/
+captures/
+*.apk
+*.aab
+
+# Fetched toolchains and native build products
+third_party/
+work/
+app/src/main/jniLibs/
+
+# Runtime output
+*.log

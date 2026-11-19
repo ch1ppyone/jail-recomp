@@ -1,0 +1,74 @@
+diff --git a/nativ/runtime/audio/ngs.c b/nativ/runtime/audio/ngs.c
+index 84adef3..34c1142 100644
+--- a/nativ/runtime/audio/ngs.c
++++ b/nativ/runtime/audio/ngs.c
+@@ -22,8 +22,10 @@
+ #include "hle_small.h"
+ #ifndef _WIN32
+ #include <dlfcn.h>
++#ifndef __ANDROID__
+ #include <execinfo.h>
+ #endif
++#endif
+ #include "third_party/libatrac9/libatrac9.h"   /* MIT, vendored unmodified */
+ 
+ 
+@@ -411,12 +413,14 @@ static int vo_log_on(void) { return vo_log_level() != 0; }
+ static void vo_chain(char *out, size_t n) {
+ 	out[0] = 0;
+ #ifndef _WIN32
++#ifndef __ANDROID__
+ 	void *pc[96]; const int k = backtrace(pc, 96); size_t at = 0; int m = 0;
+ 	for (int i = 0; i < k && m < 24 && at < n; i++) {
+ 		Dl_info di; if (!dladdr(pc[i], &di) || !di.dli_sname || strncmp(di.dli_sname, "fn_", 3)) continue;
+ 		at += (size_t)snprintf(out + at, n - at, "%s%s", m++ ? " < " : "", di.dli_sname + 3);
+ 	}
+ #endif
++#endif
+ }
+ /* for a pack's hooks (Killzone's kz_strm_api): the game's call chain as the "vo:" lines give it */
+ void ngs_chain(char *out, size_t n) { vo_chain(out, n); }
+diff --git a/nativ/runtime/gfx/gfx_gpu.c b/nativ/runtime/gfx/gfx_gpu.c
+index a551ad6..14084f8 100644
+--- a/nativ/runtime/gfx/gfx_gpu.c
++++ b/nativ/runtime/gfx/gfx_gpu.c
+@@ -44,6 +44,7 @@
+ /* RECOMP_GPU_STATS=1 timing: microseconds per frame in each stage of gfx_gpu_draw */
+ #include <time.h>
+ #include <errno.h>
++#include <limits.h>
+ #include <unistd.h>
+ #include <sys/stat.h>
+ #include <fcntl.h>
+@@ -5219,7 +5220,7 @@ static void recipes_load(void) {   /* once, on the render thread: the shipped re
+ 	fprintf(stderr, "    gpu: shader recipes: %d shaders and %d pipelines (%d shaders from %s)%s\n", rc.nr, rc.np, nship, paths[0] ? paths[0] : "no shipped set", rc.fd < 0 ? ", not recording" : "");
+ 	/* the loader: the recipes' programs out of the game's own files (gxp_index.c), for the warm-up (recipes_warm) */
+ 	const char *off = getenv("RECOMP_SHADER_LOADER"), *cache = shader_cache_dir();
+-	char app0[1024], p[1100]; snprintf(p, sizeof p, "%s/app0", getenv("RECOMP_FS") ? getenv("RECOMP_FS") : "fs");
++	char app0[PATH_MAX], p[1100]; snprintf(p, sizeof p, "%s/app0", getenv("RECOMP_FS") ? getenv("RECOMP_FS") : "fs");
+ 	uint32_t *want = malloc((2 * (size_t)rc.nr + 1) * sizeof *want); int nwant = 0;
+ 	if (want && (rc.nr || predict_on()) && cache && !(off && *off == '0') && realpath(p, app0) && !(mkdir(cache, 0755) && errno != EEXIST)) {
+ 		for (int i = 0; i < rc.nr; i++) { want[nwant++] = rc.r[i].hash; if (rc.r[i].is_frag && rc.r[i].hash2) want[nwant++] = rc.r[i].hash2; }
+diff --git a/nativ/runtime/media/video.c b/nativ/runtime/media/video.c
+index 084ec95..7e3a695 100644
+--- a/nativ/runtime/media/video.c
++++ b/nativ/runtime/media/video.c
+@@ -39,6 +39,10 @@ enum { PIX_RGBA8888 = 0x00, PIX_RGBA565 = 0x01, PIX_RGBA5551 = 0x02, PIX_YUV420_
+ 
+ static int video_log(void) { static int v = -1; if (v < 0) v = getenv("RECOMP_VIDEO_LOG") != 0; return v; }
+ 
++/* the presented frame (display_frames) when a movie picture was last decoded: display.c's RECOMP_MOVIE_30.
++ * Defined outside RECOMP_AVCODEC: display.c references it even in a build without the decoder. */
++uint64_t video_last_picture_frame;
++
+ /* ---- the codec engine's memory: the caller hands over a block it allocated (sceCodecEngineOpenUnmapMemBlock)
+  * and takes the decoder's and the library's working memory from it; the host decoder keeps its own, so this
+  * only has to hand out aligned, non-overlapping ranges of that block */
+@@ -150,7 +154,6 @@ static int au_annexb(Dec *d, const uint8_t *p, uint32_t n) {
+ 
+ static inline uint8_t clamp8(int v) { return v < 0 ? 0 : v > 255 ? 255 : (uint8_t)v; }
+ /* a decoded picture into the caller's SceAvcdecPicture (size, SceAvcdecFrame at +4, SceAvcdecInfo at +0x44) */
+-uint64_t video_last_picture_frame;   /* the presented frame (display_frames) when a movie picture was last decoded: display.c's RECOMP_MOVIE_30 */
+ static void put_picture(Dec *d, uint32_t pic, const AVFrame *f) {
+ 	{ extern uint64_t display_frames(void); video_last_picture_frame = display_frames() + 1; }
+ 	uint32_t type = RD32(pic + 4), pitch = RD32(pic + 8), bufh = RD32(pic + 0x10), p0 = RD32(pic + 0x3c), p1 = RD32(pic + 0x40);

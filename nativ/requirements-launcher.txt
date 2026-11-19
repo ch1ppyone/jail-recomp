@@ -1,0 +1,3 @@
+# Dependencies for the JAIL PyQt launcher and the local Nativ pipeline.
+-r requirements.txt
+PyQt6==6.9.1

@@ -1,0 +1,353 @@
+<div align="center">
+
+<img src="docs/images/logo.png" alt="Tokyo Ghoul: JAIL — Recompiled" width="480">
+
+# Tokyo Ghoul: JAIL — Recompiled
+
+**The Japanese PS Vita release, recompiled for macOS Apple Silicon and Android arm64.**
+
+![Status: experimental](https://img.shields.io/badge/status-experimental-a61930?style=flat-square)
+![Platforms: macOS and Android](https://img.shields.io/badge/platforms-macOS%20%7C%20Android-252529?style=flat-square)
+![Title: PCSG00615](https://img.shields.io/badge/title-PCSG00615_%C2%B7_1.00-252529?style=flat-square)
+![Game data: not included](https://img.shields.io/badge/game_data-not_included-252529?style=flat-square)
+
+[Platforms](#platforms) · [Screenshots](#screenshots) · [macOS](#macos) · [Android](#android) · [How it works](#how-it-works) · [FAQ](#faq)
+
+</div>
+
+**JAIL Recompiled** is a native recompilation of **Tokyo Ghoul: JAIL**
+(`PCSG00615`, Japan, version 1.00). The game's ARMv7 code is translated ahead
+of time into C and compiled together with a Vita-compatible runtime. It is not
+a rewritten game engine or a conventional emulator.
+
+> [!IMPORTANT]
+> **Bring your own game.** No game files, firmware, licences or translation
+> assets are included. You need your own legally obtained PKG, matching
+> licence and Vita firmware. This is a source repository: there is no prebuilt
+> app or APK to download.
+
+## Platforms
+
+| Platform | Status | Launcher | Graphics | Input |
+| :--- | :--- | :--- | :--- | :--- |
+| **macOS** Apple Silicon | ✅ Playable start to finish | PyQt6 desktop launcher | SDL3 · Metal | Keyboard, gamepad |
+| **Android** arm64 | 🧪 Experimental: verified on emulator, not yet on real phones | First-launch file picker | SDL3 · Vulkan | Touch controls, gamepad |
+| **Windows** | 🕓 Planned | — | — | — |
+| **Linux** | 🕓 Planned | — | — | — |
+
+Both ports run the same recompiled game code and the same runtime, so saves
+and game behaviour match. Windows and Linux support is planned for a later
+stage.
+
+## Screenshots
+
+<table>
+  <tr>
+    <th width="50%">macOS</th>
+    <th width="50%">Android</th>
+  </tr>
+  <tr>
+    <td><a href="docs/images/launcher-home.png"><img src="docs/images/launcher-home.png" alt="macOS launcher" width="100%"></a></td>
+    <td><a href="docs/images/android-launcher.png"><img src="docs/images/android-launcher.png" alt="Android first-launch screen" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><b>Launcher</b></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/game-menu-jp.png"><img src="docs/images/game-menu-jp.png" alt="Main menu on macOS" width="100%"></a></td>
+    <td><a href="docs/images/android-menu-gamepad.png"><img src="docs/images/android-menu-gamepad.png" alt="Main menu on Android with touch controls" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><b>Main menu</b></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/game-story-jp.png"><img src="docs/images/game-story-jp.png" alt="Story scene on macOS" width="100%"></a></td>
+    <td><a href="docs/images/android-story-gamepad.png"><img src="docs/images/android-story-gamepad.png" alt="Story scene on Android with touch controls" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><b>In game</b></td>
+  </tr>
+</table>
+
+Screenshots come from the original Japanese release running in local builds.
+
+## What you need
+
+| File | What it is |
+| :--- | :--- |
+| `PCSG00615.pkg` | Your Japanese 1.00 game package (original filename is fine) |
+| `work.bin` or `.rif` | The matching 512-byte licence for that package |
+| `PSVUPDAT.PUP` | Sony's Vita firmware update; system libraries are rebuilt from it |
+
+The PKG does not contain the firmware, and the firmware does not contain the
+game: all three are needed.
+
+## macOS
+
+### Requirements
+
+- Mac with Apple Silicon, macOS 11 or newer;
+- Apple Command Line Tools (`xcode-select --install`);
+- Python 3 with `venv`;
+- [Homebrew](https://brew.sh) — recommended, used to install missing `cmake`
+  and `ninja`;
+- about 5 GB of free disk space for the decrypted game and the build.
+
+The launcher installs everything else on first run: a Python environment in
+`nativ/.venv` with PyQt6, PyCryptodome and Capstone, and the pinned native
+toolchain (SDL3, SPIRV-Cross, FFmpeg).
+
+### Install and play
+
+1. Put your files in `data/`:
+
+   ```text
+   data/
+   ├── PCSG00615.pkg
+   ├── work.bin
+   └── PSVUPDAT.PUP
+   ```
+
+2. Start the launcher from the repository root:
+
+   ```sh
+   ./JAIL-PyQt.command
+   ```
+
+3. Press **PREPARE & PLAY**. The first run decrypts your copy, recompiles the
+   game and builds it, which takes a while. After that the button becomes
+   **PLAY JAIL** and the game starts right away.
+
+If your files are elsewhere, use **Browse** in the launcher: it checks the
+files and copies them into `data/`.
+
+### Launcher pages
+
+| Page | What it does |
+| :--- | :--- |
+| **Home** | File check, build status, Prepare & Play / Play JAIL |
+| **Game Data** | PKG, licence and firmware status; Browse and re-check |
+| **Controls** | Keyboard bindings |
+| **Display** | Resolution, frame rate, picture fit, aspect ratio, volume |
+| **Settings** | Optional system log, local folders, licence notices |
+
+<details>
+<summary><b>Command-line build</b></summary>
+
+The launcher runs these same steps. With the files in `data/`:
+
+```sh
+src/tools/prepare_jail.sh
+```
+
+or step by step:
+
+```sh
+cd nativ
+./vitarecomp firmware   ../data/PSVUPDAT.PUP
+./vitarecomp licenses   import ../data/work.bin
+./vitarecomp add        ../data/PCSG00615.pkg --license ../data/work.bin --no-build
+./vitarecomp analyze    PCSG00615
+./vitarecomp recompile  PCSG00615
+./vitarecomp build      PCSG00615
+./vitarecomp run        PCSG00615
+```
+
+</details>
+
+## Android
+
+The Android app is built on a Mac (or Linux) from the same sources. The game
+data it needs is produced by the macOS build above, so **build the game on
+macOS first**.
+
+### Requirements
+
+- everything from the macOS section, with a completed game build;
+- [Android Studio](https://developer.android.com/studio) or the command-line
+  SDK with:
+  - Android SDK Platform 35, Platform-Tools and Build-Tools;
+  - NDK `28.2.13676358`;
+  - CMake `3.31.6`;
+- JDK 17 (`brew install openjdk@17`);
+- an arm64 Android 10+ phone, or an emulator, with Vulkan.
+
+The Gradle wrapper is included. SDL3 3.4.10 and FFmpeg 7.1.1 are downloaded and
+built by the scripts.
+
+### Build the APK
+
+```sh
+cd android
+scripts/build_android.sh               # with video playback
+scripts/build_android.sh --no-ffmpeg   # faster build, no video
+```
+
+The APK appears in `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### Install
+
+With the phone connected over USB (debugging enabled) or an emulator running:
+
+```sh
+cd android
+scripts/install_android.sh
+```
+
+This installs the APK and copies the game data from your macOS build to the
+app: the game files (about 1.1 GB) and the system modules rebuilt from your
+firmware.
+
+### First launch
+
+On the first launch the app asks for three files:
+
+| Choice | File |
+| :--- | :--- |
+| Game image | `game.img` from `nativ/dump/decrypted/PCSG00615/recomp/` |
+| Vita firmware | `PSVUPDAT.PUP` |
+| Licence | `work.bin` |
+
+The launcher checks them, copies them into the app's private storage and
+starts the game. From then on, the app goes straight to the game.
+
+### Controls
+
+On-screen buttons appear on the first touch and hide when a gamepad is used.
+A Bluetooth or USB gamepad works out of the box.
+
+### Tips
+
+- On the emulator, start it with a hardware GPU for full speed:
+
+  ```sh
+  $ANDROID_HOME/emulator/emulator -avd <name> -gpu host
+  ```
+
+- Real-phone performance and battery use have not been measured yet.
+
+## How it works
+
+<p align="center">
+  <img src="docs/images/how-it-works.svg" alt="How it works: your files are checked and prepared, the game's ARMv7 code is recompiled to C, and the shared game code and runtime are built for macOS and Android" width="100%">
+</p>
+
+1. **Your files** — the PKG, licence and firmware stay on your machine.
+2. **Prepare** — the package is decrypted and the Vita system libraries are
+   rebuilt from your firmware.
+3. **Recompile** — the game's ARMv7 code is analysed and translated to C, one
+   function at a time.
+4. **Build** — the generated C is compiled together with a Vita-compatible
+   runtime that provides graphics, audio, input, files, saves and timing.
+5. **Play** — the result is a native macOS app or Android APK. There is no
+   emulator and no JIT at runtime.
+
+The original game assets are read from your decrypted copy; nothing from the
+game is stored in this repository.
+
+## Troubleshooting
+
+| Problem | Fix |
+| :--- | :--- |
+| Play button disabled | Open **Game Data** and check the three badges; the files must be the Japanese 1.00 release |
+| `No module named 'Crypto'` | Run `./JAIL-PyQt.command` again to finish the setup |
+| Very slow rendering on macOS | The native toolchain is missing; run the launcher again so it can build it |
+| Android: `libSDL3.so not found` | Rebuild with `scripts/build_android.sh` |
+| Android: black screen after start | Run `scripts/install_android.sh` again so the game data is copied |
+| Want a fresh start | Delete `nativ/dump/` to decrypt and rebuild from scratch |
+
+To report a problem, enable **Settings → Write system log** and attach
+`logs/launcher.log`. On Android: `adb logcat -s JailAndroid SDL`.
+
+## FAQ
+
+**Does this include the game or firmware?**
+No. You provide your own game, licence and firmware.
+
+**Can I download a ready-made app or APK?**
+No. Everything is built locally from your own files. Do not share built APKs
+or apps: they contain code derived from the game.
+
+**Is the game translated?**
+No. The build uses the original Japanese release.
+
+**Will another region or update work?**
+No. This targets the Japanese 1.00 release only.
+
+## Repository layout
+
+```text
+src/launcher/   macOS launcher
+android/        Android app and build scripts
+nativ/          recompiler, runtime and build pipeline (shared)
+packs/          game-specific configuration
+src/tools/      helper tools
+docs/images/    screenshots and diagrams
+data/           your files — not tracked by Git
+```
+
+## Credits
+
+- **[Luufen/nativ](https://github.com/Luufen/nativ)** (GPL-2.0-or-later) —
+  Vita runtime, static recompiler, decryption pipeline and launcher tooling.
+  Included in `nativ/`.
+- **[Project Nativ](https://github.com/TheLostPantheon/nativ)** — community
+  project that Luufen/nativ is forked from; original runtime and tooling.
+- **[PersonaDancingRecomp](https://github.com/Ecstatic-Magician/PersonaDancingRecomp)**
+  by Ecstatic-Magician — Vita runtime work merged into the nativ lineage.
+- **[Vita3K](https://github.com/Vita3K/Vita3K)** — Vita hardware and
+  system-module reference; `SceSelf`, PKG, PUP and NID handling in
+  `nativ/decrypt/`.
+- **[VitaSDK / vita-headers](https://github.com/vitasdk/vita-headers)** — NID
+  database used to name imported functions.
+- **[pkg2zip](https://github.com/mmozeiko/pkg2zip)** — PKG container format
+  reference.
+- **[psvpfstools](https://github.com/motoharu-gosuto/psvpfstools)** and
+  **[Vita3K psvpfsparser](https://github.com/Vita3K/psvpfsparser)** — PFS
+  decryption reference.
+- **[TeamMolecule sceutils](https://github.com/TeamMolecule/sceutils)** — key
+  values and SELF/PUP handling reference.
+- **[SDL3](https://github.com/libsdl-org/SDL)** — window, input, audio and GPU
+  platform layer on macOS and Android.
+- **[Dear ImGui](https://github.com/ocornut/imgui)** (MIT) — runtime overlay.
+- **[AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)**
+  (MIT) — FSR 3.1 upscaler shaders.
+- **[FFmpeg](https://ffmpeg.org)** (LGPL-2.1-or-later) — H.264 and AAC decoding.
+- **[SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross)** (Apache-2.0) —
+  shader translation on macOS.
+- **[Capstone](https://github.com/capstone-engine/capstone)** (BSD-3-Clause) —
+  ARM disassembly in the analysis tools.
+- **[PyCryptodome](https://www.pycryptodome.org)** (BSD-2-Clause; parts public
+  domain) — AES and key handling in the local pipeline.
+- **[PyQt6](https://www.riverbankcomputing.com/software/pyqt/)** (GPL-3.0) —
+  launcher interface.
+- **[Kenney Input Prompts](https://kenney.nl/assets/input-prompts)** (CC0 1.0) —
+  controller button icons.
+- **[Outfit font](https://fonts.google.com/specimen/Outfit)** (SIL OFL 1.1) —
+  bundled UI font.
+
+Project-specific work — JAIL title pack, launchers, macOS and Android ports,
+build tooling and documentation: **[ch1ppyone](https://github.com/ch1ppyone)**.
+
+Full component terms are in `LICENSE`, `nativ/LICENSE`, `nativ/THIRD_PARTY.md`
+and alongside the vendored third-party sources.
+
+## Legal
+
+Tokyo Ghoul: JAIL © 石田スイ／集英社・東京喰種製作委員会
+©2015 BANDAI NAMCO Entertainment Inc. All rights to the game, its characters
+and assets belong to their respective owners.
+
+This independent project is not affiliated with, endorsed by or sponsored by
+Bandai Namco Entertainment, Sony Interactive Entertainment, Shueisha or any
+other rights holder.
+
+No game packages, firmware, keys, licences, decrypted executables, generated
+game builds or modified game archives are included. Use only files you are
+legally entitled to use. Do not publish private inputs or derived game content.
+
+---
+
+<div align="center">
+<sub>Tokyo Ghoul: JAIL — Recompiled · by <a href="https://github.com/ch1ppyone">ch1ppyone</a></sub>
+</div>

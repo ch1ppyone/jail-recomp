@@ -1,0 +1,58 @@
+# User-provided game/firmware/licence data
+iso/
+firmware/
+extracted/
+licenses/
+eng/
+local/
+data/
+*.pkg
+*.vpk
+*.rif
+work.bin
+*.self
+*.suprx
+*.elf
+
+# Nativ's per-user library, generated code and builds
+nativ/dump/
+nativ/build/
+nativ/.venv/
+nativ/launcher/nativ
+nativ/launcher/libSDL3.0.dylib
+nativ/launcher/SDL3.dll
+nativ/launcher/nativ.exe
+nativ/**/__pycache__/
+nativ/**/*.pyc
+
+# Project-local generated/research outputs
+build/
+logs/
+analysis/frames/
+analysis/pipeline_test/
+prototype/ru/patch/
+prototype/ru/test_expand/
+prototype/ru/textures/
+prototype/ru/*.csv
+prototype/ru/*.gf
+
+# Generic build and OS files
+*.o
+*.a
+*.dylib
+*.so
+*.dll
+*.tmp
+.DS_Store
+__pycache__/
+*.pyc
+
+# Local research and translation notes (kept on disk, not published)
+research/
+docs/translation/
+
+# Translation and research helpers (kept on disk, not published)
+src/tools/*
+!src/tools/prepare_jail.sh
+!src/tools/check_dump.py
+!src/tools/normalize_dump.py
