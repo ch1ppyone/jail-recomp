@@ -274,6 +274,12 @@ No. The build uses the original Japanese release.
 **Will another region or update work?**
 No. This targets the Japanese 1.00 release only.
 
+## Star history
+
+<a href="https://star-history.com/#ch1ppyone/jail-recomp&Date">
+  <img src="https://api.star-history.com/svg?repos=ch1ppyone/jail-recomp&type=Date" alt="Star history chart for ch1ppyone/jail-recomp" width="100%">
+</a>
+
 ## Repository layout
 
 ```text
