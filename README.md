@@ -203,6 +203,43 @@ scripts/build_android.sh --no-ffmpeg   # faster build, no video
 
 The APK appears in `android/app/build/outputs/apk/debug/app-debug.apk`.
 
+### Release build (signed)
+
+Release APKs are signed with a key kept outside the repository, in
+`data/keystore/` (ignored by Git). Create it once and keep it safe: every
+update must carry the same signature.
+
+```sh
+cd android
+scripts/release_apk.sh v0.1.1
+```
+
+The script builds `assembleRelease`, verifies the signature, stages
+`nativ/build/release/v0.1.1/JAIL-v0.1.1-android-arm64.apk` and writes its
+SHA-256. `versionCode` and `versionName` live in `android/app/build.gradle`.
+
+An APK signed with a different key (for example an older debug build) cannot
+be updated in place: uninstall it once, then install the release build.
+
+### Verification
+
+```sh
+cd android
+tests/run.sh
+```
+
+builds synthetic PKGs and runs the Android decryptor against them: the good
+package, a licence from another copy, a truncated download, a corrupted
+payload, a file that is not a PKG, a failed reinstall that must keep the
+previous `app0` and saves, and the free-space message. `.github/workflows/verify.yml`
+runs the same checks plus the Python reference self-tests on every push;
+`release-checksums.yml` regenerates `SHA256SUMS` from the uploaded release
+assets.
+
+A GitHub-hosted runner cannot build the APK itself: the recompiled game C is
+private. `.github/workflows/android-build.yml` is a manual job for a
+self-hosted Mac that has the local game build and `data/keystore/`.
+
 ### Install
 
 With the phone connected over USB (debugging enabled) or an emulator running:

@@ -85,14 +85,15 @@ public final class VitaDecryptor {
         if (!fs.isDirectory() && !fs.mkdirs()) throw new IOException("cannot create " + fs);
         File part = new File(fs, "app0.part");
         File stage = new File(fs, "prepare.part");
+        File decrypted = new File(fs, "app0.new");
         deleteTree(part);
         deleteTree(stage);
+        deleteTree(decrypted);
         if (!stage.mkdirs()) throw new IOException("cannot create " + stage);
 
         try {
             extractPkg(pkg, stage, info, progress);
             progress.progress("Decrypting game data", 0, 1);
-            File decrypted = new File(fs, "app0.new");
             deleteTree(decrypted);
             decryptPfs(stage, klic, decrypted, progress);
             writeGameInfo(decrypted, info);
@@ -106,7 +107,22 @@ public final class VitaDecryptor {
         } finally {
             if (System.getenv("JAIL_KEEP_STAGE") == null) deleteTree(stage);
             deleteTree(part);
+            /* A failed run must not leave a second ~1 GB tree behind. After a
+               successful install this path no longer exists. */
+            deleteTree(decrypted);
         }
+    }
+
+    /**
+     * A message for the launcher when the device cannot hold the package and
+     * the decrypted tree, or null when there is enough room. Kept separate from
+     * StatFs so the arithmetic and wording are testable on a host JVM.
+     */
+    static String spaceMessage(long free, long needed, String what) {
+        if (free >= needed) return null;
+        return String.format(java.util.Locale.US,
+                "Not enough free space for %s: need about %.1f GB, only %.1f GB available. Free some space and try again.",
+                what, needed / 1e9, free / 1e9);
     }
 
     // ---------------------------------------------------------------------
@@ -577,7 +593,7 @@ public final class VitaDecryptor {
             for (Map.Entry<String, byte[]> e : left.entrySet()) {
                 if (Arrays.equals(hmac(sigKey, e.getValue()), target)) { found = e.getKey(); break; }
             }
-            if (found == null) throw new IOException("unicv.db: no file matches a PFS table (wrong work.bin)");
+            if (found == null) throw new IOException("unicv.db: no file matches a PFS table (wrong work.bin or corrupted PKG)");
             out.put(found, t);
             left.remove(found);
         }

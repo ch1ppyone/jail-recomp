@@ -1,0 +1,32 @@
+name: release-checksums
+
+# Whenever a release is published, recompute SHA256SUMS from the uploaded
+# assets. This is the safety net against stale hashes: the APK and DMG are
+# built on the developer's machines, but their digests are always regenerated
+# here from the bytes GitHub actually stores.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  checksums:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recompute and upload SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets --clobber
+          rm -f assets/SHA256SUMS
+          if [ -z "$(find assets -maxdepth 1 -type f -print -quit)" ]; then
+            echo "release has no assets"; exit 1
+          fi
+          ( cd assets && sha256sum -- * > SHA256SUMS )
+          cat assets/SHA256SUMS
+          gh release upload "$TAG" assets/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber

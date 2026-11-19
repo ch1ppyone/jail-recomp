@@ -1,0 +1,29 @@
+name: android-apk
+
+# The game's recompiled C is private and is not in this repository, so a
+# GitHub-hosted runner cannot build the APK. Run this on a self-hosted macOS
+# runner that has the local checkout with nativ/dump/decrypted/PCSG00615 and
+# data/keystore/ in place. It is manual on purpose: normal pushes only run the
+# host-side decryptor checks in verify.yml.
+on:
+  workflow_dispatch:
+
+jobs:
+  signed-apk:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the local inputs
+        run: |
+          test -f data/keystore/keystore.properties || { echo "missing data/keystore/keystore.properties"; exit 1; }
+          test -f nativ/dump/decrypted/PCSG00615/recomp/game.c || { echo "missing the decrypted game build"; exit 1; }
+      - name: Build the signed APK
+        run: |
+          cd android
+          scripts/build_android.sh --no-ffmpeg
+          ./gradlew :app:assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JAIL-android-arm64
+          path: android/app/build/outputs/apk/release/app-release.apk

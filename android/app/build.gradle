@@ -9,6 +9,16 @@ def gameRecompDir = System.getenv('GAME_RECOMP_DIR') ?: new File(nativRoot, 'dum
 def sdl3Root = System.getenv('SDL3_ROOT') ?: new File(projectDir, '../third_party/sdl3-android').canonicalPath
 def ffmpegRoot = System.getenv('FFMPEG_ROOT') ?: new File(projectDir, '../third_party/ffmpeg-android').canonicalPath
 
+// Release signing lives outside the repository: data/keystore/ is ignored by
+// Git. Without it, assembleRelease still works but produces an unsigned APK.
+def keystoreDir = new File(projectDir, '../../data/keystore')
+def keystorePropsFile = new File(keystoreDir, 'keystore.properties')
+def keystoreProps = new Properties()
+def hasReleaseKeystore = keystorePropsFile.isFile()
+if (hasReleaseKeystore) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace 'dev.ch1ppy.jail'
     compileSdk 35
@@ -18,8 +28,8 @@ android {
         applicationId 'dev.ch1ppy.jail'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '0.1-android'
+        versionCode 2
+        versionName '0.1.1'
 
         ndk {
             abiFilters 'arm64-v8a'
@@ -54,6 +64,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            release {
+                storeFile new File(keystoreDir, keystoreProps.getProperty('storeFile', 'jail-release.jks'))
+                storePassword keystoreProps.getProperty('storePassword')
+                keyAlias keystoreProps.getProperty('keyAlias', 'jail')
+                keyPassword keystoreProps.getProperty('keyPassword')
+            }
+        }
+    }
+
     buildTypes {
         debug {
             debuggable true
@@ -61,6 +82,7 @@ android {
         }
         release {
             minifyEnabled false
+            if (hasReleaseKeystore) signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

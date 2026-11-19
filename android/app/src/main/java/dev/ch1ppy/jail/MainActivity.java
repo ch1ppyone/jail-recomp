@@ -410,11 +410,8 @@ public class MainActivity extends Activity {
         }
 
         static void requireSpace(Activity a, long needed, String what) throws Exception {
-            long free = freeSpace(a);
-            if (free < needed) {
-                throw new Exception("Not enough free space for " + what + ": need about "
-                        + gb(needed) + ", only " + gb(free) + " available. Free some space and try again.");
-            }
+            String message = VitaDecryptor.spaceMessage(freeSpace(a), needed, what);
+            if (message != null) throw new Exception(message);
         }
 
         private static long sizeOf(Activity a, Uri uri) {
