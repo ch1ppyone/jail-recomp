@@ -39,6 +39,10 @@ enum { PIX_RGBA8888 = 0x00, PIX_RGBA565 = 0x01, PIX_RGBA5551 = 0x02, PIX_YUV420_
 
 static int video_log(void) { static int v = -1; if (v < 0) v = getenv("RECOMP_VIDEO_LOG") != 0; return v; }
 
+/* the presented frame (display_frames) when a movie picture was last decoded: display.c's RECOMP_MOVIE_30.
+ * Defined outside RECOMP_AVCODEC: display.c references it even in a build without the decoder. */
+uint64_t video_last_picture_frame;
+
 /* ---- the codec engine's memory: the caller hands over a block it allocated (sceCodecEngineOpenUnmapMemBlock)
  * and takes the decoder's and the library's working memory from it; the host decoder keeps its own, so this
  * only has to hand out aligned, non-overlapping ranges of that block */
@@ -150,7 +154,6 @@ static int au_annexb(Dec *d, const uint8_t *p, uint32_t n) {
 
 static inline uint8_t clamp8(int v) { return v < 0 ? 0 : v > 255 ? 255 : (uint8_t)v; }
 /* a decoded picture into the caller's SceAvcdecPicture (size, SceAvcdecFrame at +4, SceAvcdecInfo at +0x44) */
-uint64_t video_last_picture_frame;   /* the presented frame (display_frames) when a movie picture was last decoded: display.c's RECOMP_MOVIE_30 */
 static void put_picture(Dec *d, uint32_t pic, const AVFrame *f) {
 	{ extern uint64_t display_frames(void); video_last_picture_frame = display_frames() + 1; }
 	uint32_t type = RD32(pic + 4), pitch = RD32(pic + 8), bufh = RD32(pic + 0x10), p0 = RD32(pic + 0x3c), p1 = RD32(pic + 0x40);

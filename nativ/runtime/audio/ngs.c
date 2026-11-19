@@ -22,7 +22,9 @@
 #include "hle_small.h"
 #ifndef _WIN32
 #include <dlfcn.h>
+#ifndef __ANDROID__
 #include <execinfo.h>
+#endif
 #endif
 #include "third_party/libatrac9/libatrac9.h"   /* MIT, vendored unmodified */
 
@@ -411,11 +413,13 @@ static int vo_log_on(void) { return vo_log_level() != 0; }
 static void vo_chain(char *out, size_t n) {
 	out[0] = 0;
 #ifndef _WIN32
+#ifndef __ANDROID__
 	void *pc[96]; const int k = backtrace(pc, 96); size_t at = 0; int m = 0;
 	for (int i = 0; i < k && m < 24 && at < n; i++) {
 		Dl_info di; if (!dladdr(pc[i], &di) || !di.dli_sname || strncmp(di.dli_sname, "fn_", 3)) continue;
 		at += (size_t)snprintf(out + at, n - at, "%s%s", m++ ? " < " : "", di.dli_sname + 3);
 	}
+#endif
 #endif
 }
 /* for a pack's hooks (Killzone's kz_strm_api): the game's call chain as the "vo:" lines give it */

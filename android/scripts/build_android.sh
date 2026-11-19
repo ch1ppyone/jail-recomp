@@ -40,7 +40,6 @@ else
 fi
 
 export NATIV_ROOT="${NATIV_ROOT:-$ROOT/../nativ}"
-"$ROOT/scripts/apply_runtime_patches.sh"
 
 mkdir -p "$ROOT/app/src/main/jniLibs/arm64-v8a"
 cp -f "$ROOT/third_party/sdl3-android/lib/libSDL3.so" "$ROOT/app/src/main/jniLibs/arm64-v8a/libSDL3.so"
