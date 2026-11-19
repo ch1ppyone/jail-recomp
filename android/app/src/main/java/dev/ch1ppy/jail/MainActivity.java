@@ -138,9 +138,19 @@ public class MainActivity extends Activity {
         private static final byte[] CONTENT_ID = "JP0700-PCSG00615_00-TOKYOGHOUL000001".getBytes();
         static boolean valid(Activity a) {
             File source = new File(a.getFilesDir(), "source");
-            return validFile(new File(new File(a.getFilesDir(), "jail"), "game.img"), 1024 * 1024)
+            return validGameImage(new File(new File(a.getFilesDir(), "jail"), "game.img"))
                     && validPup(new File(source, "PSVUPDAT.PUP"))
                     && validWork(new File(source, "work.bin"));
+        }
+        /* the recompiled image starts with "VRIM". A PSN .pkg or the app0 archive is
+         * about 1 GB and is not a game image: accepting one made the runtime print
+         * "not an image" and crash, so the check now names the file it wants. */
+        private static boolean validGameImage(File f) {
+            if (!validFile(f, 1024 * 1024)) return false;
+            try (InputStream in = new java.io.FileInputStream(f)) {
+                byte[] h = new byte[4]; if (in.read(h) < h.length) return false;
+                return h[0] == 'V' && h[1] == 'R' && h[2] == 'I' && h[3] == 'M';
+            } catch (Exception e) { return false; }
         }
         static void install(Activity a, Map<String, Uri> files) throws Exception {
             File jail = new File(a.getFilesDir(), "jail"); File source = new File(a.getFilesDir(), "source");
