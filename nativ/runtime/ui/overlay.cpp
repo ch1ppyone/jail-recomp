@@ -1592,7 +1592,7 @@ static void build_closed(void) {
 		if (g_layout_ask && !g_layout_card && !g_intro && !g_open) { g_layout_card = true; g_open = true; apply_pause(); }   /* (the game waits for it: before the prep card) */
 		else if (ps == 1 && !g_intro && !g_open && !g_layout_card) { g_prep_card = true; g_open = true; apply_pause(); }
 		else if (ps == 2 && total > 0) build_prep_corner(w, hgt, done, total);
-		else if (ps == 3) overlay_toast_titled("Shaders ready", "Built for this computer: no more pauses to build them.", 4.0);
+		else if (ps == 3 && !std::getenv("RECOMP_ANDROID_NO_SHADER_TOAST")) overlay_toast_titled("Shaders ready", "Built for this computer: no more pauses to build them.", 4.0);
 	}
 	if (g_bar_vis > 0) build_bar(w);
 	if (g_tab_a > 0) build_tab(w, t);
@@ -1892,7 +1892,7 @@ static void build_prep(void) {
 	else ps = gfx_gpu_shader_prep(&done, &total, &eta);
 	if (ps != 1) {   /* the builds are done (or the card was never meant): back to the game */
 		g_prep_card = false; g_open = false; g_paused = false; apply_pause();
-		if (ps == 3) overlay_toast_titled("Shaders ready", "Built for this computer: no more pauses to build them.", 4.0);
+		if (ps == 3 && !std::getenv("RECOMP_ANDROID_NO_SHADER_TOAST")) overlay_toast_titled("Shaders ready", "Built for this computer: no more pauses to build them.", 4.0);
 		return;
 	}
 	const ImGuiViewport *vp = ImGui::GetMainViewport(); const float em = ImGui::GetFontSize();

@@ -148,6 +148,9 @@ int SDL_main(int argc, char **argv) {
     /* Touch controls should be visible immediately on Android. Desktop's `auto` mode waits
      * for the first finger, which makes the virtual sticks look absent on a fresh launch. */
     if (!getenv("RECOMP_OSB")) setenv("RECOMP_OSB", "on", 1);
+    /* Shader compilation still runs and its cache is kept, but the completion toast is noisy
+     * on the mobile first-launch flow. */
+    if (!getenv("RECOMP_ANDROID_NO_SHADER_TOAST")) setenv("RECOMP_ANDROID_NO_SHADER_TOAST", "1", 1);
     /* Off by default: the emulator exposes its keyboard as a phantom gamepad ("qwerty2"),
      * which makes the runtime auto-hide the on-screen buttons. A physical pad can be
      * enabled with `am start ... --ez gamepad true`. */
