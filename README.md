@@ -208,8 +208,8 @@ scripts/install_android.sh
 ```
 
 This installs the APK and copies the game data from your macOS build to the
-app: the game files (about 1.1 GB) and the system modules rebuilt from your
-firmware.
+app: the game files (about 1.1 GB). The APK includes the small Vita runtime
+module images and installs them automatically on first launch.
 
 ### First launch
 
@@ -224,10 +224,12 @@ On the first launch the app asks for three files:
 The launcher checks them, copies them into the app's private storage and
 starts the game. From then on, the app goes straight to the game.
 
-The file picker does **not** replace `scripts/install_android.sh`: that script
-also copies the extracted `app0` game data and the system module images
-(`libc.img`, `libgxm_es4.img`, ...), which the game cannot run without. Run it
-once with the phone connected; the picker is only for the three user files.
+The APK includes the runtime modules (`libc.img`, `libgxm_es4.img`,
+`libgpu_es4.img`, `libfios2.img`, `libpvf.img`, `libult.img` and
+`libSceFt2.img`). The file picker handles the three user files above. The
+large extracted `app0` game data is not bundled in the APK; install it with
+`scripts/install_android.sh` or copy it to the app's private storage using an
+equivalent method.
 
 ### Controls
 
