@@ -17,6 +17,10 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,8 +37,7 @@ public class MainActivity extends Activity {
             "libc.img", "libgxm_es4.img", "libgpu_es4.img", "libfios2.img",
             "libpvf.img", "libult.img", "libSceFt2.img"
     };
-    /* Keep setup simple: the game image plus the two Vita inputs required by the runtime. */
-    private static final String[] KEYS = {"game", "firmware", "work"};
+    private static final String[] KEYS = {"game", "firmware", "work", "app0"};
     private final Map<String, Button> buttons = new HashMap<>();
     private final Map<String, String> labels = new HashMap<>();
     private final Map<String, Uri> pending = new HashMap<>();
@@ -73,11 +76,12 @@ public class MainActivity extends Activity {
         title.setTextColor(Color.rgb(242, 236, 226)); title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setTextSize(24); title.setPadding(0, 0, 0, pad / 2); root.addView(title);
         TextView hint = new TextView(this);
-        hint.setText("Select your game image, Vita firmware dump and matching work.bin.\nAfter validation, the game will start directly on every launch.");
+        hint.setText("Select your game image, Vita firmware dump, matching work.bin and app0.zip.\nThe installer checks and unpacks everything before launching the game.");
         hint.setTextColor(Color.rgb(160, 150, 140)); hint.setTextSize(16); root.addView(hint);
         addFile(root, "game", "Game image  ·  game.img");
         addFile(root, "firmware", "Vita firmware  ·  PSVUPDAT.PUP");
         addFile(root, "work", "License  ·  work.bin");
+        addFile(root, "app0", "Game data  ·  app0.zip  (about 1 GB)");
         Button start = new Button(this); start.setText("CHECK FILES  ·  LAUNCH GAME");
         start.setTextColor(Color.WHITE); start.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         start.setBackground(buttonBackground(Color.rgb(145, 0, 25), Color.rgb(220, 15, 45)));
@@ -97,7 +101,9 @@ public class MainActivity extends Activity {
     private void choose(String key) {
         picking = Arrays.asList(KEYS).indexOf(key);
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.addCategory(Intent.CATEGORY_OPENABLE); i.setType("application/octet-stream");
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("app0".equals(key) ? "application/zip" : "application/octet-stream");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"app0".equals(key) ? "application/zip" : "application/octet-stream", "*/*"});
         startActivityForResult(i, PICK);
     }
 
@@ -119,8 +125,8 @@ public class MainActivity extends Activity {
     }
 
     private void installAndLaunch() {
-        if (!allSelected()) { status.setText("Select all three files before launching."); return; }
-        status.setText("Validating and importing files…");
+        if (!allSelected()) { status.setText("Select all four files before launching."); return; }
+        status.setText("Validating files and unpacking game data…");
         for (Button b : buttons.values()) b.setEnabled(false);
         copyExecutor.execute(() -> {
             try {
@@ -153,7 +159,8 @@ public class MainActivity extends Activity {
             File source = new File(a.getFilesDir(), "source");
             return validGameImage(new File(new File(a.getFilesDir(), "jail"), "game.img"))
                     && validPup(new File(source, "PSVUPDAT.PUP"))
-                    && validWork(new File(source, "work.bin"));
+                    && validWork(new File(source, "work.bin"))
+                    && validApp0(a);
         }
         /* the recompiled image starts with "VRIM". A PSN .pkg or the app0 archive is
          * about 1 GB and is not a game image: accepting one made the runtime print
@@ -172,7 +179,52 @@ public class MainActivity extends Activity {
             copy(a, files.get("game"), new File(jail, "game.img"), 1024 * 1024);
             copy(a, files.get("firmware"), new File(source, "PSVUPDAT.PUP"), 0x80);
             copy(a, files.get("work"), new File(source, "work.bin"), 512);
+            installApp0(a, files.get("app0"));
             if (!valid(a)) throw new Exception("one or more files are invalid");
+        }
+        private static boolean validApp0(Activity a) {
+            File root = new File(new File(a.getFilesDir(), "fs"), "app0");
+            return new File(root, "PSP2_GAME/eboot.bin").isFile()
+                    && new File(root, "game.json").isFile();
+        }
+        private static void installApp0(Activity a, Uri uri) throws Exception {
+            File fs = new File(a.getFilesDir(), "fs");
+            if (!fs.mkdirs() && !fs.isDirectory()) throw new Exception("cannot create app storage");
+            File target = new File(fs, "app0");
+            File part = new File(fs, "app0.part");
+            deleteTree(part);
+            if (!part.mkdirs()) throw new Exception("cannot create temporary game data");
+            int entries = 0;
+            try (InputStream raw = a.getContentResolver().openInputStream(uri)) {
+                if (raw == null) throw new Exception("cannot open selected app0.zip");
+                try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(raw))) {
+                    ZipEntry entry; byte[] buf = new byte[1024 * 1024];
+                    while ((entry = zip.getNextEntry()) != null) {
+                        String name = entry.getName().replace('\\', '/');
+                        while (name.startsWith("./")) name = name.substring(2);
+                        if (name.isEmpty() || name.startsWith("/") || name.contains("../")) throw new Exception("unsafe path in app0.zip");
+                        File out = new File(part, name);
+                        String base = part.getCanonicalPath() + File.separator;
+                        if (!out.getCanonicalPath().startsWith(base)) throw new Exception("unsafe path in app0.zip");
+                        if (entry.isDirectory()) { if (!out.mkdirs() && !out.isDirectory()) throw new Exception("cannot unpack app0"); }
+                        else {
+                            File parent = out.getParentFile(); if (parent != null && !parent.mkdirs() && !parent.isDirectory()) throw new Exception("cannot unpack app0");
+                            try (FileOutputStream fos = new FileOutputStream(out)) { int n; while ((n = zip.read(buf)) != -1) fos.write(buf, 0, n); }
+                            entries++;
+                        }
+                        zip.closeEntry();
+                    }
+                }
+            } catch (Exception e) { deleteTree(part); throw e; }
+            if (entries < 10 || !new File(part, "PSP2_GAME/eboot.bin").isFile() || !new File(part, "game.json").isFile()) {
+                deleteTree(part); throw new Exception("app0.zip is not valid game data");
+            }
+            deleteTree(target);
+            if (!part.renameTo(target)) { deleteTree(part); throw new Exception("cannot finish installing game data"); }
+        }
+        private static void deleteTree(File f) {
+            if (f.isDirectory()) { File[] children = f.listFiles(); if (children != null) for (File child : children) deleteTree(child); }
+            if (f.exists()) f.delete();
         }
         static void installBundledModules(Activity a) throws Exception {
             File jail = new File(a.getFilesDir(), "jail");

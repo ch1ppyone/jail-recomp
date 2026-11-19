@@ -213,23 +213,24 @@ module images and installs them automatically on first launch.
 
 ### First launch
 
-On the first launch the app asks for three files:
+On the first launch the app asks for four files:
 
 | Choice | File |
 | :--- | :--- |
 | Game image | `game.img` from `nativ/dump/decrypted/PCSG00615/recomp/` (3.5 MB, starts with `VRIM`) |
 | Vita firmware | `PSVUPDAT.PUP` |
 | Licence | `work.bin` |
+| Game data | `app0.zip` containing the extracted `app0` directory (about 1 GB) |
 
 The launcher checks them, copies them into the app's private storage and
 starts the game. From then on, the app goes straight to the game.
 
 The APK includes the runtime modules (`libc.img`, `libgxm_es4.img`,
 `libgpu_es4.img`, `libfios2.img`, `libpvf.img`, `libult.img` and
-`libSceFt2.img`). The file picker handles the three user files above. The
-large extracted `app0` game data is not bundled in the APK; install it with
-`scripts/install_android.sh` or copy it to the app's private storage using an
-equivalent method.
+`libSceFt2.img`). The built-in installer validates and unpacks `app0.zip`
+before launching the game. The large game data is not bundled in the APK;
+select the archive once on first launch. `scripts/install_android.sh` remains
+available for developers who already have a local data directory.
 
 ### Controls
 
