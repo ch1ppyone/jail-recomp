@@ -232,6 +232,22 @@ After it finishes the game starts directly, and the copied PKG is removed.
 `scripts/install_android.sh` remains available for developers who already
 have a locally decrypted `app0` and prefer the ADB route.
 
+### Game data and support
+
+After installation the launcher becomes a small service screen. Long-press the
+app icon and choose **Game data** to open it (or run
+`adb shell am start -n dev.ch1ppy.jail/.MainActivity --ez install true`).
+
+From there you can:
+
+- launch the game;
+- **reinstall the game data** — saves and settings are kept;
+- **share a diagnostic log** with the device model, Android version and the
+  tail of `runtime.log`.
+
+The launcher checks free space before copying and decrypting and reports how
+much is missing instead of failing halfway through.
+
 ### Controls
 
 On-screen buttons are visible from launch and hide when a gamepad is used.
@@ -277,6 +293,7 @@ game is stored in this repository.
 | Very slow rendering on macOS | The native toolchain is missing; run the launcher again so it can build it |
 | Android: `libSDL3.so not found` | Rebuild with `scripts/build_android.sh` |
 | Android: black screen after start | Run the in-app installer again (or delete the app data and reinstall) |
+| Android: not enough free space | Free at least 3 GB for the first preparation, then run the installer again |
 | Android: `work.bin does not match this PKG` | Use the licence that belongs to this exact package; a licence from another edition or region is rejected |
 | Android: `the selected file is not a Vita PKG` | Select the retail `.pkg` itself, not a zip, ISO or extracted folder |
 | Want a fresh start | Delete `nativ/dump/` to decrypt and rebuild from scratch |

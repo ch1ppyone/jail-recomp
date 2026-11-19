@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Tokyo Ghoul: JAIL</string>
+    <string name="shortcut_game_data">Game data</string>
+    <string name="shortcut_game_data_long">Reinstall game data or share a log</string>
 </resources>

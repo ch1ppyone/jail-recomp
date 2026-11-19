@@ -17,6 +17,10 @@
         android:largeHeap="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
+        <meta-data
+            android:name="android.app.shortcuts"
+            android:resource="@xml/shortcuts" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
