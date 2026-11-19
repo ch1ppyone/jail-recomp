@@ -1376,6 +1376,12 @@ static void build_osb(ImDrawList *dl) {
 	OsbLayout L; osb_layout(&L, ds.x, ds.y, size);
 	const float u = L.unit, lw = u * 0.045f > 1.5f ? u * 0.045f : 1.5f;
 	const ImU32 fill = IM_COL32(16, 18, 24, 96), lit = IM_COL32(255, 255, 255, 120), edge = IM_COL32(255, 255, 255, 150), ink = IM_COL32(255, 255, 255, 215);
+	/* The sticks get their own restrained Tokyo Ghoul palette.  Keep every stroke
+	 * inside the hit rectangle: on a phone the old full-radius ring and knob
+	 * could visibly bleed outside the side columns. */
+	const ImU32 stick_shadow = IM_COL32(0, 0, 0, 78), stick_panel = IM_COL32(22, 12, 18, 132),
+		stick_ring = IM_COL32(153, 31, 53, 170), stick_inner = IM_COL32(255, 73, 91, 105),
+		stick_knob = IM_COL32(184, 35, 58, 190), stick_knob_lit = IM_COL32(255, 103, 116, 225);
 	ImFont *font = ImGui::GetFont(); const float fs = u * 0.38f;
 	auto label = [&](const OsbCtrl &c) {
 		const ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, c.label);
@@ -1400,11 +1406,29 @@ static void build_osb(ImDrawList *dl) {
 				if (r.bit == OSB_BIT_RIGHT) dl->AddTriangleFilled(ImVec2(cm.x + s, cm.y), ImVec2(cm.x - s * 0.6f, cm.y - s), ImVec2(cm.x - s * 0.6f, cm.y + s), ink);
 			}
 		} else if (i == OSB_LSTICK || i == OSB_RSTICK) {   /* the ring, and the knob where the finger is (clamped to the ring) */
-			const float r = c.w * 0.5f; const int k = i == OSB_RSTICK;
-			dl->AddCircleFilled(mid, r, fill, 48); dl->AddCircle(mid, r, edge, 48, lw);
+			const int k = i == OSB_RSTICK;
+			const float outer = c.w * 0.5f - lw * 0.5f;
+			const float panel_r = outer - u * 0.08f;
+			const float ring_r = panel_r - u * 0.13f;
+			const float knob_r = u * 0.47f;
+			dl->AddCircleFilled(ImVec2(mid.x, mid.y + u * 0.06f), panel_r + u * 0.04f, stick_shadow, 48);
+			dl->AddCircleFilled(mid, panel_r, stick_panel, 48);
+			dl->AddCircle(mid, panel_r, stick_ring, 48, lw);
+			dl->AddCircle(mid, ring_r, stick_inner, 48, lw * 0.65f);
+			/* Four tiny axis marks make the resting position clear without adding
+			 * another opaque black shape over the game. */
+			const float mark = u * 0.10f;
+			dl->AddLine(ImVec2(mid.x - mark, mid.y), ImVec2(mid.x + mark, mid.y), stick_inner, lw * 0.7f);
+			dl->AddLine(ImVec2(mid.x, mid.y - mark), ImVec2(mid.x, mid.y + mark), stick_inner, lw * 0.7f);
 			ImVec2 kp = mid;
-			if (on) { float dx = knob[2 * k] - mid.x, dy = knob[2 * k + 1] - mid.y; const float d = std::sqrt(dx * dx + dy * dy), lim = r - u * 0.55f; if (d > lim && d > 0) { dx *= lim / d; dy *= lim / d; } kp = ImVec2(mid.x + dx, mid.y + dy); }
-			dl->AddCircleFilled(kp, u * 0.55f, on ? lit : IM_COL32(255, 255, 255, 60), 32); dl->AddCircle(kp, u * 0.55f, edge, 32, lw);
+			if (on) {
+				float dx = knob[2 * k] - mid.x, dy = knob[2 * k + 1] - mid.y;
+				const float d = std::sqrt(dx * dx + dy * dy), lim = ring_r - knob_r - lw * 0.5f;
+				if (d > lim && d > 0) { dx *= lim / d; dy *= lim / d; }
+				kp = ImVec2(mid.x + dx, mid.y + dy);
+			}
+			dl->AddCircleFilled(kp, knob_r, on ? stick_knob_lit : stick_knob, 32);
+			dl->AddCircle(kp, knob_r, on ? IM_COL32(255, 185, 190, 235) : stick_ring, 32, lw);
 		} else if (c.round) {   /* a face button: a circle with its shape */
 			const float r = c.w * 0.5f, s = u * 0.2f;
 			dl->AddCircleFilled(mid, r, on ? lit : fill, 32); dl->AddCircle(mid, r, edge, 32, lw);

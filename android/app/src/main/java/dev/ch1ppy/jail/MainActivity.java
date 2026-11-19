@@ -27,6 +27,12 @@ import java.util.concurrent.Executors;
 /** First-run asset installer. Once all files pass validation, launches GameActivity directly. */
 public class MainActivity extends Activity {
     private static final int PICK = 100;
+    /* Small Vita runtime modules shipped with the APK. The large game data remains
+       user-provided and is installed separately under files/fs/app0. */
+    private static final String[] BUNDLED_MODULES = {
+            "libc.img", "libgxm_es4.img", "libgpu_es4.img", "libfios2.img",
+            "libpvf.img", "libult.img", "libSceFt2.img"
+    };
     /* Keep setup simple: the game image plus the two Vita inputs required by the runtime. */
     private static final String[] KEYS = {"game", "firmware", "work"};
     private final Map<String, Button> buttons = new HashMap<>();
@@ -42,7 +48,14 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (Assets.valid(this)) { launchGame(); return; }
+        try {
+            Assets.installBundledModules(this);
+            if (Assets.valid(this)) { launchGame(); return; }
+        } catch (Exception e) {
+            buildLauncher();
+            status.setText("Included runtime modules could not be installed: " + e.getMessage());
+            return;
+        }
         buildLauncher();
     }
 
@@ -160,6 +173,28 @@ public class MainActivity extends Activity {
             copy(a, files.get("firmware"), new File(source, "PSVUPDAT.PUP"), 0x80);
             copy(a, files.get("work"), new File(source, "work.bin"), 512);
             if (!valid(a)) throw new Exception("one or more files are invalid");
+        }
+        static void installBundledModules(Activity a) throws Exception {
+            File jail = new File(a.getFilesDir(), "jail");
+            if (!jail.mkdirs() && !jail.isDirectory()) throw new Exception("cannot create app storage");
+            for (String name : BUNDLED_MODULES) {
+                File out = new File(jail, name);
+                long assetSize;
+                try (InputStream probe = a.getAssets().open(name)) {
+                    assetSize = probe.available();
+                }
+                if (out.isFile() && out.length() == assetSize) continue;
+                copyAsset(a, name, out);
+            }
+        }
+        private static void copyAsset(Activity a, String name, File out) throws Exception {
+            File tmp = new File(out.getPath() + ".part");
+            try (InputStream in = a.getAssets().open(name); FileOutputStream fos = new FileOutputStream(tmp)) {
+                byte[] buf = new byte[64 * 1024]; int n;
+                while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
+                fos.getFD().sync();
+            }
+            if (!tmp.renameTo(out)) { tmp.delete(); throw new Exception("cannot install " + name); }
         }
         private static void copy(Activity a, Uri uri, File out, long minimum) throws Exception {
             File tmp = new File(out.getPath() + ".part"); long total = 0; byte[] buf = new byte[1024 * 1024];
