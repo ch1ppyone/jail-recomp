@@ -157,8 +157,8 @@ cd nativ
 
 ## Android
 
-The Android app is built on a Mac (or Linux) from the same sources. The game
-data it needs is produced by the macOS build above, so **build the game on
+The Android APK is built on a Mac (or Linux) from the same sources. The
+recompiled game code comes from the macOS build above, so **build the game on
 macOS first**.
 
 **Hardware status (19 November 2026):** the game was installed and played
