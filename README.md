@@ -31,7 +31,7 @@ a rewritten game engine or a conventional emulator.
 | Platform | Status | Launcher | Graphics | Input |
 | :--- | :--- | :--- | :--- | :--- |
 | **macOS** Apple Silicon | ✅ Playable start to finish | PyQt6 desktop launcher | SDL3 · Metal | Keyboard, gamepad |
-| **Android** arm64 | 🧪 Experimental: verified on a real phone (Galaxy S25 Ultra · Android 17) and the emulator | First-launch file picker | SDL3 · Vulkan | Touch controls, gamepad |
+| **Android** arm64 | ✅ Playable start to finish (verified on a Galaxy S25 Ultra · Android 17) | First-launch file picker | SDL3 · Vulkan | Touch controls, gamepad |
 | **Windows** | 🕓 Planned | — | — | — |
 | **Linux** | 🕓 Planned | — | — | — |
 
@@ -161,10 +161,10 @@ The Android app is built on a Mac (or Linux) from the same sources. The game
 data it needs is produced by the macOS build above, so **build the game on
 macOS first**.
 
-**Hardware status (19 November 2026):** the APK was installed and launched on
-a **Samsung Galaxy S25 Ultra (SM-S938B, Android 17, arm64)**: the game boots,
-renders its menus and story scenes at full speed, and the touch controls and
-controller input work. The same build runs on the Android emulator. Two
+**Hardware status (19 November 2026):** the game was installed and played
+through to the end on a **Samsung Galaxy S25 Ultra (SM-S938B, Android 17,
+arm64)**: story scenes, menus and the touch/controller input all work, and the
+game is fully completable. The same build runs on the Android emulator. Two
 device-specific details came out of that test:
 
 - Android 17's libc aborts on a destroyed mutex inside Samsung's vendor display
