@@ -31,7 +31,7 @@ a rewritten game engine or a conventional emulator.
 | Platform | Status | Launcher | Graphics | Input |
 | :--- | :--- | :--- | :--- | :--- |
 | **macOS** Apple Silicon | ✅ Playable start to finish | PyQt6 desktop launcher | SDL3 · Metal | Keyboard, gamepad |
-| **Android** arm64 | ✅ Playable start to finish (verified on a Galaxy S25 Ultra · Android 17) | First-launch file picker | SDL3 · Vulkan | Touch controls, gamepad |
+| **Android** arm64 | ✅ Playable start to finish (verified on a Galaxy S25 Ultra · Android 17) | Built-in PKG installer | SDL3 · Vulkan | Touch controls, gamepad |
 | **Windows** | 🕓 Planned | — | — | — |
 | **Linux** | 🕓 Planned | — | — | — |
 
@@ -207,30 +207,29 @@ cd android
 scripts/install_android.sh
 ```
 
-This installs the APK and copies the game data from your macOS build to the
-app: the game files (about 1.1 GB). The APK includes the small Vita runtime
-module images and installs them automatically on first launch.
+This installs the APK. For development it also pushes an already prepared
+`app0` and the runtime inputs over ADB, which skips the on-device installer.
 
 ### First launch
 
-On the first launch the app asks for four files:
+On the first launch the app asks for three files:
 
 | Choice | File |
 | :--- | :--- |
-| Game image | `game.img` from `nativ/dump/decrypted/PCSG00615/recomp/` (3.5 MB, starts with `VRIM`) |
+| Game package | your retail `PCSG00615.pkg` (about 1 GB) |
 | Vita firmware | `PSVUPDAT.PUP` |
 | Licence | `work.bin` |
-| Game data | `app0.zip` containing the extracted `app0` directory (about 1 GB) |
 
-The launcher checks them, copies them into the app's private storage and
-starts the game. From then on, the app goes straight to the game.
+The app decrypts the PKG on the phone itself and writes `app0` into its
+private storage. The recompiled game image (`game.img`) and the small Vita
+runtime modules (`libc.img`, `libgxm_es4.img`, `libgpu_es4.img`,
+`libfios2.img`, `libpvf.img`, `libult.img`, `libSceFt2.img`) are already
+inside the APK and are installed automatically.
 
-The APK includes the runtime modules (`libc.img`, `libgxm_es4.img`,
-`libgpu_es4.img`, `libfios2.img`, `libpvf.img`, `libult.img` and
-`libSceFt2.img`). The built-in installer validates and unpacks `app0.zip`
-before launching the game. The large game data is not bundled in the APK;
-select the archive once on first launch. `scripts/install_android.sh` remains
-available for developers who already have a local data directory.
+The first preparation needs about 3 GB of free space and takes a few minutes.
+After it finishes the game starts directly, and the copied PKG is removed.
+`scripts/install_android.sh` remains available for developers who already
+have a locally decrypted `app0` and prefer the ADB route.
 
 ### Controls
 
@@ -275,7 +274,7 @@ game is stored in this repository.
 | `No module named 'Crypto'` | Run `./JAIL-PyQt.command` again to finish the setup |
 | Very slow rendering on macOS | The native toolchain is missing; run the launcher again so it can build it |
 | Android: `libSDL3.so not found` | Rebuild with `scripts/build_android.sh` |
-| Android: black screen after start | Run `scripts/install_android.sh` again so the game data is copied |
+| Android: black screen after start | Run the in-app installer again (or delete the app data and reinstall) |
 | Want a fresh start | Delete `nativ/dump/` to decrypt and rebuild from scratch |
 
 To report a problem, enable **Settings → Write system log** and attach

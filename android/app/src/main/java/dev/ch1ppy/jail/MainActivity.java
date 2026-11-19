@@ -17,10 +17,6 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.BufferedInputStream;
-import java.io.IOException;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,13 +27,13 @@ import java.util.concurrent.Executors;
 /** First-run asset installer. Once all files pass validation, launches GameActivity directly. */
 public class MainActivity extends Activity {
     private static final int PICK = 100;
-    /* Small Vita runtime modules shipped with the APK. The large game data remains
-       user-provided and is installed separately under files/fs/app0. */
+    /* Runtime modules and generated game image are shipped with the APK. */
     private static final String[] BUNDLED_MODULES = {
             "libc.img", "libgxm_es4.img", "libgpu_es4.img", "libfios2.img",
             "libpvf.img", "libult.img", "libSceFt2.img"
     };
-    private static final String[] KEYS = {"game", "firmware", "work", "app0"};
+    private static final String[] KEYS = {"pkg", "firmware", "work"};
+    interface Status { void set(String text); }
     private final Map<String, Button> buttons = new HashMap<>();
     private final Map<String, String> labels = new HashMap<>();
     private final Map<String, Uri> pending = new HashMap<>();
@@ -53,13 +49,15 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         try {
             Assets.installBundledModules(this);
+            Assets.installBundledGameImage(this);
             if (Assets.valid(this)) { launchGame(); return; }
         } catch (Exception e) {
             buildLauncher();
-            status.setText("Included runtime modules could not be installed: " + e.getMessage());
+            status.setText("Included runtime files could not be installed: " + e.getMessage());
             return;
         }
         buildLauncher();
+        if (Assets.canAutoInstall(this)) startAutoInstall();
     }
 
     private void buildLauncher() {
@@ -76,12 +74,11 @@ public class MainActivity extends Activity {
         title.setTextColor(Color.rgb(242, 236, 226)); title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setTextSize(24); title.setPadding(0, 0, 0, pad / 2); root.addView(title);
         TextView hint = new TextView(this);
-        hint.setText("Select your game image, Vita firmware dump, matching work.bin and app0.zip.\nThe installer checks and unpacks everything before launching the game.");
+        hint.setText("Select your original Vita PKG, firmware dump and matching work.bin.\nThe installer decrypts and prepares the game before launching it.");
         hint.setTextColor(Color.rgb(160, 150, 140)); hint.setTextSize(16); root.addView(hint);
-        addFile(root, "game", "Game image  ·  game.img");
+        addFile(root, "pkg", "Game package  ·  PCSG00615.pkg");
         addFile(root, "firmware", "Vita firmware  ·  PSVUPDAT.PUP");
         addFile(root, "work", "License  ·  work.bin");
-        addFile(root, "app0", "Game data  ·  app0.zip  (about 1 GB)");
         Button start = new Button(this); start.setText("CHECK FILES  ·  LAUNCH GAME");
         start.setTextColor(Color.WHITE); start.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         start.setBackground(buttonBackground(Color.rgb(145, 0, 25), Color.rgb(220, 15, 45)));
@@ -102,8 +99,8 @@ public class MainActivity extends Activity {
         picking = Arrays.asList(KEYS).indexOf(key);
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("app0".equals(key) ? "application/zip" : "application/octet-stream");
-        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"app0".equals(key) ? "application/zip" : "application/octet-stream", "*/*"});
+        i.setType("application/octet-stream");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/octet-stream", "*/*"});
         startActivityForResult(i, PICK);
     }
 
@@ -125,12 +122,26 @@ public class MainActivity extends Activity {
     }
 
     private void installAndLaunch() {
-        if (!allSelected()) { status.setText("Select all four files before launching."); return; }
-        status.setText("Validating files and unpacking game data…");
+        if (!allSelected()) { status.setText("Select all three files before launching."); return; }
+        status.setText("Validating files and decrypting game package…");
         for (Button b : buttons.values()) b.setEnabled(false);
         copyExecutor.execute(() -> {
             try {
-                Assets.install(this, pending);
+                Assets.install(this, pending, text -> runOnUiThread(() -> status.setText(text)));
+                runOnUiThread(this::launchGame);
+            } catch (Exception e) {
+                runOnUiThread(() -> { status.setText("Error: " + e.getMessage()); for (Button b : buttons.values()) b.setEnabled(true); });
+            }
+        });
+    }
+
+    /** Complete an install whose files were staged over ADB (development/testing). */
+    private void startAutoInstall() {
+        status.setText("Preparing game data from the staged package…");
+        for (Button b : buttons.values()) b.setEnabled(false);
+        copyExecutor.execute(() -> {
+            try {
+                Assets.decryptSource(this, text -> runOnUiThread(() -> status.setText(text)));
                 runOnUiThread(this::launchGame);
             } catch (Exception e) {
                 runOnUiThread(() -> { status.setText("Error: " + e.getMessage()); for (Button b : buttons.values()) b.setEnabled(true); });
@@ -172,59 +183,66 @@ public class MainActivity extends Activity {
                 return h[0] == 'V' && h[1] == 'R' && h[2] == 'I' && h[3] == 'M';
             } catch (Exception e) { return false; }
         }
-        static void install(Activity a, Map<String, Uri> files) throws Exception {
+        static void install(Activity a, Map<String, Uri> files, Status status) throws Exception {
             File jail = new File(a.getFilesDir(), "jail"); File source = new File(a.getFilesDir(), "source");
             if (!jail.mkdirs() && !jail.isDirectory()) throw new Exception("cannot create app storage");
             if (!source.mkdirs() && !source.isDirectory()) throw new Exception("cannot create app storage");
-            copy(a, files.get("game"), new File(jail, "game.img"), 1024 * 1024);
+            installBundledGameImage(a);
             copy(a, files.get("firmware"), new File(source, "PSVUPDAT.PUP"), 0x80);
             copy(a, files.get("work"), new File(source, "work.bin"), 512);
-            installApp0(a, files.get("app0"));
+            File pkg = new File(source, "game.pkg");
+            status.set("Copying package… (about 1 GB)");
+            copy(a, files.get("pkg"), pkg, 0x100);
+            if (!validPkg(pkg)) { pkg.delete(); throw new Exception("the selected file is not a Vita PKG"); }
+            decryptSource(a, status);
             if (!valid(a)) throw new Exception("one or more files are invalid");
+        }
+
+        static void decryptSource(Activity a, Status status) throws Exception {
+            File source = new File(a.getFilesDir(), "source");
+            File pkg = new File(source, "game.pkg");
+            if (!validPkg(pkg)) throw new Exception("game.pkg is missing");
+            if (!validWork(new File(source, "work.bin"))) throw new Exception("work.bin is invalid");
+            status.set("Decrypting game data…");
+            VitaDecryptor.decryptPkg(pkg, new File(source, "work.bin"), new File(a.getFilesDir(), "fs"),
+                    (stage, done, total) -> status.set(total > 1
+                            ? stage + "… " + (done * 100 / total) + "%"
+                            : stage + "…"));
+            /* The ~1 GB copy is only needed for the random access during
+               decryption; the user's original stays untouched. */
+            pkg.delete();
+        }
+
+        static boolean canAutoInstall(Activity a) {
+            File source = new File(a.getFilesDir(), "source");
+            return validPkg(new File(source, "game.pkg"))
+                    && validPup(new File(source, "PSVUPDAT.PUP"))
+                    && validWork(new File(source, "work.bin"))
+                    && !validApp0(a);
+        }
+
+        private static boolean validPkg(File f) {
+            if (!validFile(f, 0x100)) return false;
+            try (InputStream in = new java.io.FileInputStream(f)) {
+                byte[] h = new byte[4];
+                if (in.read(h) < 4) return false;
+                return (h[0] & 0xFF) == 0x7F && h[1] == 'P' && h[2] == 'K' && h[3] == 'G';
+            } catch (Exception e) { return false; }
         }
         private static boolean validApp0(Activity a) {
             File root = new File(new File(a.getFilesDir(), "fs"), "app0");
-            return new File(root, "PSP2_GAME/eboot.bin").isFile()
+            // The decrypted Vita app produced by vitadecrypt keeps the executable
+            // at the content root; PSP2_GAME contains metadata and resources.
+            return new File(root, "eboot.bin").isFile()
                     && new File(root, "game.json").isFile();
         }
-        private static void installApp0(Activity a, Uri uri) throws Exception {
-            File fs = new File(a.getFilesDir(), "fs");
-            if (!fs.mkdirs() && !fs.isDirectory()) throw new Exception("cannot create app storage");
-            File target = new File(fs, "app0");
-            File part = new File(fs, "app0.part");
-            deleteTree(part);
-            if (!part.mkdirs()) throw new Exception("cannot create temporary game data");
-            int entries = 0;
-            try (InputStream raw = a.getContentResolver().openInputStream(uri)) {
-                if (raw == null) throw new Exception("cannot open selected app0.zip");
-                try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(raw))) {
-                    ZipEntry entry; byte[] buf = new byte[1024 * 1024];
-                    while ((entry = zip.getNextEntry()) != null) {
-                        String name = entry.getName().replace('\\', '/');
-                        while (name.startsWith("./")) name = name.substring(2);
-                        if (name.isEmpty() || name.startsWith("/") || name.contains("../")) throw new Exception("unsafe path in app0.zip");
-                        File out = new File(part, name);
-                        String base = part.getCanonicalPath() + File.separator;
-                        if (!out.getCanonicalPath().startsWith(base)) throw new Exception("unsafe path in app0.zip");
-                        if (entry.isDirectory()) { if (!out.mkdirs() && !out.isDirectory()) throw new Exception("cannot unpack app0"); }
-                        else {
-                            File parent = out.getParentFile(); if (parent != null && !parent.mkdirs() && !parent.isDirectory()) throw new Exception("cannot unpack app0");
-                            try (FileOutputStream fos = new FileOutputStream(out)) { int n; while ((n = zip.read(buf)) != -1) fos.write(buf, 0, n); }
-                            entries++;
-                        }
-                        zip.closeEntry();
-                    }
-                }
-            } catch (Exception e) { deleteTree(part); throw e; }
-            if (entries < 10 || !new File(part, "PSP2_GAME/eboot.bin").isFile() || !new File(part, "game.json").isFile()) {
-                deleteTree(part); throw new Exception("app0.zip is not valid game data");
-            }
-            deleteTree(target);
-            if (!part.renameTo(target)) { deleteTree(part); throw new Exception("cannot finish installing game data"); }
-        }
-        private static void deleteTree(File f) {
-            if (f.isDirectory()) { File[] children = f.listFiles(); if (children != null) for (File child : children) deleteTree(child); }
-            if (f.exists()) f.delete();
+        private static void installBundledGameImage(Activity a) throws Exception {
+            File jail = new File(a.getFilesDir(), "jail");
+            if (!jail.mkdirs() && !jail.isDirectory()) throw new Exception("cannot create app storage");
+            File out = new File(jail, "game.img");
+            long size;
+            try (InputStream probe = a.getAssets().open("game.img")) { size = probe.available(); }
+            if (!out.isFile() || out.length() != size) copyAsset(a, "game.img", out);
         }
         static void installBundledModules(Activity a) throws Exception {
             File jail = new File(a.getFilesDir(), "jail");
