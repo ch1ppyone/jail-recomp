@@ -2,8 +2,8 @@
 # release.sh <tag> <os>...: a release's downloads, made on this machine in build/release/<tag>/. For each OS named:
 #   mac      JAIL-<tag>-mac.dmg: Tokyo Ghoul JAIL.app (dev/macos-install.sh) beside a link to Applications, the
 #            player drags one onto the other; made on a Mac
-#   windows  ProjectNativ-<tag>-windows.zip, one ProjectNativ folder inside (dev/windows-install.sh; on macOS or Linux)
-#   linux    ProjectNativ-<tag>-linux.AppImage: the install (dev/linux-install.sh) as one file the player marks
+#   windows  JAIL-<tag>-windows.zip, one TokyoGhoulJAIL folder inside (dev/windows-install.sh; on macOS or Linux)
+#   linux    JAIL-<tag>-linux.AppImage: the install (dev/linux-install.sh) as one file the player marks
 #            executable and runs, a Steam Deck's non-Steam game too; made on Linux (appimagetool and its runtime fetched
 #            once, pinned by SHA-256)
 # then SHA256SUMS over every download there (a release made on two machines: copy the other's in, run again with no OS).
@@ -60,7 +60,7 @@ PY
 }
 
 for os in "$@"; do
-  W=$OUT/work-$os; rm -rf "$W"; mkdir -p "$W"; I=$W/ProjectNativ; Z=$OUT/ProjectNativ-$TAG-$os.zip; rm -f "$Z"
+  W=$OUT/work-$os; rm -rf "$W"; mkdir -p "$W"; I=$W/TokyoGhoulJAIL; Z=$OUT/JAIL-$TAG-$os.zip; rm -f "$Z"
   case $os in
     mac)
       [[ $(uname) == Darwin ]] || { echo "release.sh: the Mac install is made on a Mac"; exit 1; }
@@ -104,10 +104,10 @@ for d, _, files in os.walk(root):
 with open(os.path.join(root, ".nativ-files"), "w", encoding="utf-8", newline="\n") as o:
     for r, n in sorted(rows): o.write(f"{n} {r}\n")
 PY
-      (cd "$W" && zipdir "$Z" ProjectNativ);;
+       (cd "$W" && zipdir "$Z" TokyoGhoulJAIL);;
     linux)
       [[ $(uname) == Linux ]] || { echo "release.sh: the Linux install is made on Linux"; exit 1; }
-      bash "$H/linux-install.sh" "$I"; Z=$OUT/ProjectNativ-$TAG-linux.AppImage; rm -f "$Z"
+       bash "$H/linux-install.sh" "$I"; Z=$OUT/JAIL-$TAG-linux.AppImage; rm -f "$Z"
       AT_VER=1.9.1 AT_SHA=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0   # appimagetool
       RT_VER=20251108 RT_SHA=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d   # its runtime (static: no libfuse2 needed)
       DL=${ATIV_LINUX_TOOLCHAIN:-$HOME/toolchains/ativ-linux}/dl; mkdir -p "$DL"
@@ -116,9 +116,9 @@ PY
       getv appimagetool-$AT_VER "https://github.com/AppImage/appimagetool/releases/download/$AT_VER/appimagetool-x86_64.AppImage" "$AT_SHA"
       getv appimage-runtime-$RT_VER "https://github.com/AppImage/type2-runtime/releases/download/$RT_VER/runtime-x86_64" "$RT_SHA"
       chmod +x "$DL/appimagetool-$AT_VER"
-      printf '#!/bin/sh\nexec "$APPDIR/launcher/nativ" "$@"\n' > "$I/AppRun"; chmod +x "$I/AppRun"   # (the AppImage's start: the launcher, which finds its folder)
-      printf '[Desktop Entry]\nType=Application\nName=Project Nativ\nComment=Your PS Vita games, rebuilt natively\nExec=nativ\nIcon=project-nativ\nCategories=Game;\nTerminal=false\n' > "$I/project-nativ.desktop"
-      cp "$I/assets/brand/png/icon-256.png" "$I/project-nativ.png"; rm -f "$I/Project Nativ.sh"
+       printf '#!/bin/sh\nexec "$APPDIR/launcher/nativ" "$@"\n' > "$I/AppRun"; chmod +x "$I/AppRun"   # (the AppImage's start: the launcher, which finds its folder)
+       printf '[Desktop Entry]\nType=Application\nName=Tokyo Ghoul: JAIL\nComment=Recompiled Tokyo Ghoul: JAIL\nExec=nativ\nIcon=tokyo-ghoul-jail\nCategories=Game;\nTerminal=false\n' > "$I/tokyo-ghoul-jail.desktop"
+       cp "$I/assets/brand/png/icon-256.png" "$I/tokyo-ghoul-jail.png"; rm -f "$I/Project Nativ.sh" "$I/project-nativ.desktop" "$I/project-nativ.png"
       ARCH=x86_64 "$DL/appimagetool-$AT_VER" --appimage-extract-and-run --no-appstream --runtime-file "$DL/appimage-runtime-$RT_VER" "$I" "$Z" >/dev/null;;
     *) echo "release.sh: mac, windows or linux, not $os"; exit 1;;
   esac
@@ -126,5 +126,5 @@ PY
   echo "$Z ($(du -h "$Z" | cut -f1))"
 done
 
-(cd "$OUT" && rm -f SHA256SUMS && shopt -s nullglob && sha ProjectNativ-"$TAG"-*.{zip,AppImage} JAIL-"$TAG"-*.dmg > SHA256SUMS && cat SHA256SUMS)
-echo "to publish: gh release create $TAG $OUT/ProjectNativ-$TAG-*.{zip,AppImage} $OUT/JAIL-$TAG-*.dmg $OUT/SHA256SUMS --repo ${NATIV_RELEASES:-<owner>/<repo>} --title \"Tokyo Ghoul: JAIL $TAG\" --notes-file <notes.md>"
+(cd "$OUT" && rm -f SHA256SUMS && shopt -s nullglob && sha JAIL-"$TAG"-*.{zip,AppImage,dmg} > SHA256SUMS && cat SHA256SUMS)
+echo "to publish: gh release create $TAG $OUT/JAIL-$TAG-* $OUT/SHA256SUMS --repo ${NATIV_RELEASES:-<owner>/<repo>} --title \"Tokyo Ghoul: JAIL $TAG\" --notes-file <notes.md>"

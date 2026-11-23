@@ -4,14 +4,15 @@
 
 # Tokyo Ghoul: JAIL — Recompiled
 
-**The Japanese PS Vita release, recompiled for macOS Apple Silicon and Android arm64.**
+**The Japanese PS Vita release, recompiled for macOS Apple Silicon and Windows
+x86-64, with an Android arm64 port. Linux support is planned.**
 
 ![Status: experimental](https://img.shields.io/badge/status-experimental-a61930?style=flat-square)
-![Platforms: macOS and Android](https://img.shields.io/badge/platforms-macOS%20%7C%20Android-252529?style=flat-square)
+![Platforms: macOS, Windows, Linux and Android](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android-252529?style=flat-square)
 ![Title: PCSG00615](https://img.shields.io/badge/title-PCSG00615_%C2%B7_1.00-252529?style=flat-square)
 ![Game data: not included](https://img.shields.io/badge/game_data-not_included-252529?style=flat-square)
 
-[Platforms](#platforms) · [Screenshots](#screenshots) · [macOS](#macos) · [Android](#android) · [How it works](#how-it-works) · [FAQ](#faq)
+[Platforms](#platforms) · [Screenshots](#screenshots) · [Desktop releases](#desktop-releases) · [macOS](#macos) · [Android](#android) · [How it works](#how-it-works) · [FAQ](#faq)
 
 </div>
 
@@ -32,36 +33,36 @@ a rewritten game engine or a conventional emulator.
 | :--- | :--- | :--- | :--- | :--- |
 | **macOS** Apple Silicon | ✅ Playable start to finish | PyQt6 desktop launcher | SDL3 · Metal | Keyboard, gamepad |
 | **Android** arm64 | ✅ Playable start to finish (verified on a Galaxy S25 Ultra · Android 17) | Built-in PKG installer | SDL3 · Vulkan | Touch controls, gamepad |
-| **Windows** | 🕓 Planned | — | — | — |
-| **Linux** | 🕓 Planned | — | — | — |
+| **Windows** x86-64 | ✅ Playable start to finish (verified on ASUS ROG Xbox Ally X) | PyQt6 desktop launcher | SDL3 · D3D12/Vulkan, software fallback | Keyboard, mouse, gamepad |
+| **Linux** x86-64 | 🕓 Planned | PyQt6 desktop launcher | SDL3 · GPU or software fallback | Keyboard, mouse, gamepad |
 
-Both ports run the same recompiled game code and the same runtime, so saves
-and game behaviour match. Windows and Linux support is planned for a later
-stage.
+All desktop ports use the same PyQt6 launcher, external `data/` inputs and
+user-data library. They run the same recompiled game code and runtime, so saves
+and game behaviour match.
 
 ## Screenshots
 
 <table>
   <tr>
-    <th width="50%">macOS</th>
+    <th width="50%">macOS / Windows</th>
     <th width="50%">Android</th>
   </tr>
   <tr>
-    <td><a href="docs/images/launcher-home.png"><img src="docs/images/launcher-home.png" alt="macOS launcher" width="100%"></a></td>
+    <td><a href="docs/images/launcher-home.png"><img src="docs/images/launcher-home.png" alt="macOS / Windows launcher" width="100%"></a></td>
     <td><a href="docs/images/android-launcher.png"><img src="docs/images/android-launcher.png" alt="Android first-launch screen" width="100%"></a></td>
   </tr>
   <tr>
     <td align="center" colspan="2"><b>Launcher</b></td>
   </tr>
   <tr>
-    <td><a href="docs/images/game-menu-jp.png"><img src="docs/images/game-menu-jp.png" alt="Main menu on macOS" width="100%"></a></td>
+    <td><a href="docs/images/game-menu-jp.png"><img src="docs/images/game-menu-jp.png" alt="Main menu on macOS / Windows" width="100%"></a></td>
     <td><a href="docs/images/android-menu-gamepad.png"><img src="docs/images/android-menu-gamepad.png" alt="Main menu on Android with touch controls" width="100%"></a></td>
   </tr>
   <tr>
     <td align="center" colspan="2"><b>Main menu</b></td>
   </tr>
   <tr>
-    <td><a href="docs/images/game-story-jp.png"><img src="docs/images/game-story-jp.png" alt="Story scene on macOS" width="100%"></a></td>
+    <td><a href="docs/images/game-story-jp.png"><img src="docs/images/game-story-jp.png" alt="Story scene on macOS / Windows" width="100%"></a></td>
     <td><a href="docs/images/android-story-gamepad.png"><img src="docs/images/android-story-gamepad.png" alt="Story scene on Android with touch controls" width="100%"></a></td>
   </tr>
   <tr>
@@ -69,7 +70,90 @@ stage.
   </tr>
 </table>
 
-Screenshots come from the original Japanese release running in local builds.
+The macOS and Windows desktop builds use the same launcher and runtime, so the
+screenshots in that column represent both platforms. Screenshots come from the
+original Japanese release running in local builds.
+
+### Verification
+
+The Windows desktop release was tested on a physical **ASUS ROG Xbox Ally X**.
+The game completes from the first launch through the end of the story, with
+menus, story scenes, audio, controls, saves and native game rendering working.
+This is the current recommended Windows hardware target. VM testing remains
+useful for packaging checks, but a VM without a supported GPU backend may use
+the SDL software renderer and run slowly.
+
+## Desktop releases
+
+Desktop release packages contain the launcher, native runtime, build tools and
+third-party runtime libraries. They do **not** contain the original PKG,
+`work.bin`, `PSVUPDAT.PUP`, decrypted game files or generated game builds.
+
+### Install and play
+
+1. Download the package for your operating system from the GitHub release.
+2. Put your own files beside the launcher in a `data/` folder:
+
+   ```text
+   data/
+   ├── PCSG00615.pkg
+   ├── work.bin
+   └── PSVUPDAT.PUP
+   ```
+
+3. Start the launcher and press **PREPARE & PLAY**. The first run decrypts the
+   package, analyses it, recompiles the game and builds the native executable.
+   Later launches use **PLAY JAIL**.
+
+The generated library, saves, settings and logs are kept in the platform's
+user-data directory, not in the downloaded release folder:
+
+| Platform | User-data directory |
+| :--- | :--- |
+| macOS | `~/Library/Application Support/TokyoGhoulJAIL/JAIL` |
+| Windows | `%LOCALAPPDATA%\\TokyoGhoulJAIL\\JAIL` |
+| Linux | `${XDG_DATA_HOME:-~/.local/share}/TokyoGhoulJAIL/JAIL` |
+
+The Windows package is named **Tokyo Ghoul JAIL.exe** and includes the required
+LLVM runtime DLLs, Qt6 dependencies and the JAIL icon. The Windows release is
+tested on ASUS ROG Xbox Ally X. Linux support is planned; the AppImage build
+workflow is kept in `nativ/dev/release.sh` for future Linux-host packaging.
+
+### Windows GPU and VM note
+
+The Windows build is fully playable on supported real hardware. Some virtual
+GPU configurations expose no SDL GPU backend, producing this diagnostic:
+
+```text
+window: no GPU device; presenting with the SDL software renderer
+```
+
+In that case the game remains functional but rendering is slow. Enable the
+VM's 3D acceleration and install the guest tools when testing performance. On
+the ASUS ROG Xbox Ally X and other Windows hosts with a supported D3D12 or
+Vulkan backend, SDL uses the hardware path. `RECOMP_NO_GPU=1` can be used to
+force the software path for diagnostics.
+
+### Building release packages
+
+From `nativ/`, after building the platform toolchains:
+
+```sh
+./dev/release.sh v0.1.2 mac windows
+```
+
+The script writes packages and `SHA256SUMS` to `nativ/build/release/<tag>/`.
+Windows is included in the desktop release. Linux remains planned and is not
+part of the current published platform matrix. When Linux packaging is ready,
+its AppImage will be built on a Linux host:
+
+```sh
+./dev/release.sh v0.1.2 linux
+```
+
+Release builds must be made from an exact, clean tag. Publishing is a separate
+step; the script prints the `gh release create` command but does not publish
+anything automatically.
 
 ## What you need
 

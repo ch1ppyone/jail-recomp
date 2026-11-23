@@ -1,7 +1,8 @@
 #!/bin/bash
 # The Mac install of Tokyo Ghoul: JAIL: one self-contained app, macos-install.sh <folder> -> <folder>/Tokyo Ghoul JAIL.app
 #   Contents/MacOS/Tokyo Ghoul JAIL  a tiny launcher that runs the bundled Python and the PyQt6 UI in Resources.
-#                                   The player's files, logs and builds go to ~/Library/Application Support/TokyoGhoulJAIL/JAIL.
+#                                   The release's data/ (PKG, work.bin, PUP) sits beside the .app; generated files go to
+#                                   ~/Library/Application Support/TokyoGhoulJAIL/JAIL.
 #   Contents/Resources/             the shipped tools (vitarecomp dist: pipeline, runtime, packs, ...), version.txt,
 #                                   toolchain/ (SDL3, SPIRV-Cross and FFmpeg's H.264 decoder: runtime/platform/macos/
 #                                   setup-toolchain.sh's, without its downloads and build trees) and python/
@@ -18,6 +19,13 @@ PY_SHA=9c985cbf327425873469896ce748c7134b6deca8edb81e93c589ad2fc5aff445   # aarc
 H=$(cd "$(dirname "$0")" && pwd); ROOT=$(dirname "$H")
 DEST=${1:?usage: macos-install.sh <folder>}; mkdir -p "$DEST"; DEST=$(cd "$DEST" && pwd)
 APP="$DEST/Tokyo Ghoul JAIL.app"; OUT="$APP/Contents/Resources"; mkdir -p "$OUT" "$APP/Contents/MacOS"
+mkdir -p "$DEST/data"
+cat > "$DEST/data/README.txt" <<'EOF'
+Put the game's own files here before starting the launcher:
+  PCSG00615.pkg
+  work.bin
+  PSVUPDAT.PUP
+EOF
 MT=${ATIV_MAC_TOOLCHAIN:-$HOME/toolchains/ativ-mac}
 [[ -f $MT/SDL3/lib/libSDL3.0.dylib && -f $MT/spirv-cross/lib/libspirv-cross-c.a ]] || { echo "no Mac toolchain at $MT: run runtime/platform/macos/setup-toolchain.sh"; exit 1; }
 PYX=${PYTHON:-$ROOT/.venv/bin/python}; [[ -x $PYX ]] || PYX=python3
@@ -46,6 +54,9 @@ cat > "$APP/Contents/MacOS/Tokyo Ghoul JAIL" <<'LAUNCH'
 #!/bin/sh
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
 export JAIL_APP_RESOURCES="$RES"
+APP_DIR="$(cd "$RES/../.." && pwd)"
+RELEASE_DATA="$(cd "$APP_DIR/.." && pwd)/data"
+if [ -d "$RELEASE_DATA" ]; then export JAIL_DATA="$RELEASE_DATA"; fi
 export ATIV_MAC_TOOLCHAIN="$RES/toolchain"
 export PYTHONPYCACHEPREFIX="$HOME/Library/Application Support/TokyoGhoulJAIL/JAIL/pycache"
 exec "$RES/python/bin/python3" "$RES/launcher/pyqt_launcher.py" "$@"

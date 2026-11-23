@@ -122,6 +122,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import zlib
 
 R = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(R)   # (pipeline/: this; the repository above it)
@@ -159,6 +160,73 @@ DUMP = library_dir(ROOT)   # (the player's library: datadir.py)
 TOOLS_ENV = {"PYTHONPATH": DECRYPT}   # (vitadecrypt, a package there)
 SELF = [sys.executable, os.path.abspath(__file__)]   # ($0: a command that runs another stage)
 TITLE_RE = re.compile(r"[A-Z]{4}[0-9]{5}\Z")
+
+
+class _TeeBuffer:
+    """The binary side of _Tee: subprocess pumps write bytes here."""
+    def __init__(self, stream, log):
+        self.stream = stream
+        self.log = log
+
+    def write(self, data):
+        try:
+            if self.stream is not None:
+                self.stream.write(data)
+        except Exception:
+            pass
+        try:
+            self.log.write(bytes(data).decode("utf-8", "replace"))
+            self.log.flush()
+        except Exception:
+            pass
+        return len(data)
+
+    def flush(self):
+        for stream in (self.stream, self.log):
+            try:
+                if stream is not None:
+                    stream.flush()
+            except Exception:
+                pass
+
+
+class _Tee:
+    """stdout/stderr copied to a launch log: a windowed Windows launch has no console."""
+    def __init__(self, stream, log):
+        self.stream = stream
+        self.log = log
+
+    def write(self, data):
+        try:
+            if self.stream is not None:
+                self.stream.write(data)
+        except Exception:
+            pass
+        try:
+            self.log.write(data)
+            self.log.flush()
+        except Exception:
+            pass
+        return len(data)
+
+    def flush(self):
+        for stream in (self.stream, self.log):
+            try:
+                if stream is not None:
+                    stream.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        return False
+
+    @property
+    def encoding(self):
+        return getattr(self.stream, "encoding", "utf-8") or "utf-8"
+
+    @property
+    def buffer(self):
+        return _TeeBuffer(getattr(self.stream, "buffer", None), self.log)
 
 
 def say(*a):
@@ -634,9 +702,16 @@ def cmd_ready(g):
         say(f"{g.T}: the recompiler or the game's pack changed since its code was made: making it again")
         run(SELF + ["analyze", g.T]); run(SELF + ["recompile", g.T]); remade = True
     ver = tools_version()
-    if remade or not ver or stamp(".built_version") != ver or not os.path.isfile(os.path.join(g.OUT, g.EXE)):
+    built = os.path.join(g.OUT, g.EXE)
+    if remade or not ver or stamp(".built_version") != ver or not os.path.isfile(built):
         say(f"{g.T}: building it with these tools ({ver or 'a checkout without git'})")
         run(SELF + ["build", g.T])
+        # Keep the readiness decision stable across packaged Windows launches.
+        # The build command normally writes this stamp too, but ready owns the
+        # post-build decision and must record the exact version it compared.
+        if os.path.isfile(built) and ver:
+            with open(os.path.join(g.OUT, ".built_version"), "w", newline="\n") as f:
+                f.write(ver + "\n")
     else: say(f"{g.T}: up to date")
 
 
@@ -720,6 +795,19 @@ def play_fixed_env(g, shipped=None, icon=None):
 def cmd_run(g, frames):
     OUT = g.OUT
     os.makedirs(os.path.join(OUT, "captures"), exist_ok=True)   # F12 in the window saves captures here
+    # A launcher-started Windows process has no console. Say exactly what is
+    # being launched and fail with the missing path instead of a bare traceback.
+    say(f"host: {os.path.join(OUT, g.EXE)}")
+    say(f"image: {os.path.join(OUT, g.BASE + '.img')}")
+    say(f"analysis: {g.DATA}")
+    for label, path in (("host", os.path.join(OUT, g.EXE)),
+                        ("image", os.path.join(OUT, g.BASE + ".img")),
+                        ("analysis", g.DATA)):
+        if not os.path.isfile(path):
+            say(f"{label} MISSING: {path}")
+            die(f"{g.T}: cannot start: {label} is missing ({path}); run Prepare & Play again")
+    entry = g.entry()
+    say(f"entry: {entry}")
     # RUN_ENV: the game's play settings (correctness fixes it needs); TEST_ENV is the gate's and pins the software renderer -- applying it here ran every manual play on the interpreter
     # session.log: this session's stderr (the terminal still shows it; the one before is session.prev.log), with the hitch
     # log on for frames over 50 ms -- what a first-use stutter did, from the player's own session (RECOMP_HITCH_LOG=0: off)
@@ -736,7 +824,7 @@ def cmd_run(g, frames):
         if os.path.isfile(os.path.join(OUT, "session.log")): os.replace(os.path.join(OUT, "session.log"), os.path.join(OUT, "session.prev.log"))
         link_system_fonts(os.path.join(OUT, "fs"))   # (fonts added after the build count too)
         e = game_env(g, g.RUN_ENV.split() + (ENV.get("EXTRA_ENV") or "").split(), fixed)
-        rc = tee_run(g.exe_argv(os.path.join(OUT, g.EXE)) + [g.BASE + ".img", g.entry(), frames or "100000000000"], e, OUT, os.path.join(OUT, "session.log"))
+        rc = tee_run(g.exe_argv(os.path.join(OUT, g.EXE)) + [g.BASE + ".img", entry, frames or "100000000000"], e, OUT, os.path.join(OUT, "session.log"))
     finally:
         if ENV.get("ATIV_POST_EXIT"): subprocess.run(ENV["ATIV_POST_EXIT"], shell=True)
     sys.exit(rc)
@@ -1311,6 +1399,29 @@ def main(argv):
     cmd = argv[0] if argv else ""; T = argv[1] if len(argv) > 1 else ""
     if cmd == "update-check": cmd_update_check(); return 0
     if not cmd or (not T and cmd not in ("licenses", "folders", "steam")): usage(); return 1
+    if cmd == "run":
+        # The launcher starts this process detached with no console. Keep every
+        # line, including an early exception before Game is constructed, in the
+        # game's own folder.
+        try:
+            log_dir = os.path.join(DUMP, "decrypted", T, "recomp")
+            os.makedirs(log_dir, exist_ok=True)
+            run_log = open(os.path.join(log_dir, "launch.log"), "w", encoding="utf-8", errors="replace")
+            sys.stdout = _Tee(sys.stdout, run_log)
+            sys.stderr = _Tee(sys.stderr, run_log)
+            sys.excepthook = lambda tp, value, tb: traceback.print_exception(tp, value, tb)
+            say("=" * 64)
+            say(f"vitarecomp run {T}  {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            say(f"argv: {argv}")
+            say(f"cwd: {os.getcwd()}")
+            say(f"python: {sys.executable}")
+            say(f"DUMP: {DUMP}")
+            say(f"PACKS: {PACKS}")
+            say(f"TARGET: {ENV.get('TARGET', '')}")
+            say(f"WINE: {ENV.get('WINE', '')}")
+            say(f"RECOMP_LOG: {ENV.get('RECOMP_LOG', '')}")
+        except OSError as exc:
+            print(f"cannot write the launch log: {exc}", file=sys.stderr)
     if cmd == "firmware": cmd_firmware(T); return 0
     if cmd == "fonts": cmd_fonts(T); return 0
     if cmd == "scan": cmd_scan(T, argv[2:]); return 0
@@ -1340,7 +1451,14 @@ def main(argv):
     elif cmd == "recompile": cmd_recompile(g)
     elif cmd == "build": cmd_build(g, arg3)
     elif cmd == "ready": cmd_ready(g)
-    elif cmd == "run": cmd_run(g, arg3)
+    elif cmd == "run":
+        try:
+            cmd_run(g, arg3)
+        except SystemExit:
+            raise
+        except BaseException:
+            traceback.print_exc()
+            raise
     elif cmd == "test": cmd_test(g)
     elif cmd == "capture": cmd_capture(g, arg3)
     elif cmd == "replay":

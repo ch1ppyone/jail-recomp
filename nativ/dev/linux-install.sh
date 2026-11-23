@@ -1,11 +1,11 @@
 #!/bin/bash
-# A self-contained Linux install of Project Nativ in one folder (a Steam Deck's, any distribution's): linux-install.sh <folder>
+# A self-contained Linux install of Tokyo Ghoul: JAIL in one folder (a Steam Deck's, any distribution's): linux-install.sh <folder>
 #   <folder>/            the shipped tools (vitarecomp dist: pipeline, runtime, packs, ...) and version.txt
 #   <folder>/toolchain/  zig's clang, SDL3, zlib, FFmpeg (runtime/platform/linux/setup-toolchain.sh's, copied without its
 #                        downloads and build trees): runtime/build.py and launcher/build.sh use it, nothing of the machine's
 #   <folder>/python/     python-build-standalone with requirements.txt installed: the stages' Python (hub.cpp python_exe)
 #   <folder>/launcher/nativ + libSDL3.so.0   built with that toolchain; it finds the folder from where it sits
-#   <folder>/Project Nativ.sh                starts it (Steam: add it as a non-Steam game)
+#   <folder>/Tokyo Ghoul JAIL                starts it (Steam: add it as a non-Steam game)
 # Run again over the same folder to update it (dist removes only what it wrote; python and toolchain are kept when current).
 # Needs the toolchain built here first ($ATIV_LINUX_TOOLCHAIN, default ~/toolchains/ativ-linux). The player's library
 # (dump/: games, firmware) is not part of it: the launcher's first run sets that up.
@@ -34,14 +34,23 @@ if [[ ! -x $OUT/python/bin/python3 || "$("$OUT/python/bin/python3" -c 'import pl
   [[ -f $DL/$A ]] || { curl -fL --retry 3 -o "$DL/$A.part" "https://github.com/astral-sh/python-build-standalone/releases/download/$PY_REL/$A" && verify "$DL/$A.part" "$PY_SHA" && mv -f "$DL/$A.part" "$DL/$A"; }
   rm -rf "$OUT/python"; tar xzf "$DL/$A" -C "$OUT"   # (unpacks as python/)
 fi
-"$OUT/python/bin/python3" -m pip install --quiet --disable-pip-version-check --no-warn-script-location -r "$ROOT/requirements.txt"
+"$OUT/python/bin/python3" -m pip install --quiet --disable-pip-version-check --no-warn-script-location -r "$ROOT/requirements-launcher.txt"
 
 # the launcher, built with the install's own toolchain (no build machine's path in it)
-ATIV_LINUX_TOOLCHAIN=$OUT/toolchain "$ROOT/launcher/build.sh" "$OUT/launcher/nativ"
-cat > "$OUT/Project Nativ.sh" <<'EOF'
+mkdir -p "$OUT/launcher"
+cp "$ROOT/../src/launcher/pyqt_launcher.py" "$OUT/launcher/pyqt_launcher.py"
+"$OUT/toolchain/bin/c++" -O2 -std=c++17 "$ROOT/launcher/pyqt_host.cpp" -o "$OUT/launcher/nativ"
+cat > "$OUT/Tokyo Ghoul JAIL" <<'EOF'
 #!/bin/sh
-# Project Nativ's launcher (Steam: add this file as a non-Steam game)
+# Tokyo Ghoul: JAIL launcher (Steam: add this file as a non-Steam game)
 exec "$(dirname "$(readlink -f "$0")")/launcher/nativ" "$@"
 EOF
-chmod +x "$OUT/Project Nativ.sh"
+chmod +x "$OUT/Tokyo Ghoul JAIL"
+mkdir -p "$OUT/data"
+cat > "$OUT/data/README.txt" <<'EOF'
+Put the game's own files here before starting the launcher:
+  PCSG00615.pkg
+  work.bin
+  PSVUPDAT.PUP
+EOF
 echo "install: $OUT ($(cat "$OUT/version.txt"); $(du -sh "$OUT" | cut -f1))"

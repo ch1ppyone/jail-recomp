@@ -109,10 +109,16 @@ def main(argv):
     # RECOMP_CFLAGS: more code generation flags (experiments: -O3, -flto=thin). Each set keeps its own objects.
     # The objects are kept per processor, by the name the compiler resolves native to (apple-m4, znver5): an install moved
     # to another machine rebuilds rather than running instructions its processor may not have.
+    # The shipped Windows target is x86-64 even when it is built on Windows
+    # ARM under emulation.  platform.machine() may therefore say arm64 while
+    # clang targets x86_64-w64-mingw32; passing -mcpu=native in that situation
+    # is rejected by llvm-mingw.  Windows builds stay portable unless an
+    # explicit x86-64 CPU level is requested by the export pipeline.
     cross = WIN and not HOSTED_WINDOWS
-    cpu = "generic" if cross else (ENV.get("RECOMP_CPU") or "native")
+    requested_cpu = ENV.get("RECOMP_CPU") or "native"
+    cpu = "generic" if WIN and requested_cpu == "native" else ("generic" if cross else requested_cpu)
     machine = platform.machine().lower()
-    CPUFLAGS = [] if cpu == "generic" else [("-mcpu=" if machine in ("arm64", "aarch64") else "-march=") + cpu]
+    CPUFLAGS = [] if cpu == "generic" else ["-march=" + cpu]
     extra = (ENV.get("RECOMP_CFLAGS") or "").split()
     FLAGS = ["-O2", "-ffp-contract=off"] + CPUFLAGS + extra + ["-w"] + INCLUDES
     PLATFORM = [part("platform_posix")]

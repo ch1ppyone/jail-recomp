@@ -5,7 +5,7 @@
 #                               zlib and FFmpeg's H.264 decoder built for Windows (runtime/platform/win/setup-toolchain.sh's,
 #                               without its downloads and build trees), each with its licence
 #   <folder>/python/            python-build-standalone for Windows, requirements.txt's packages in its site-packages
-#   <folder>/Project Nativ.exe  the launcher, SDL3.dll beside it; it finds the folder from where it sits
+#   <folder>/Tokyo Ghoul JAIL.exe  the launcher; it finds the folder from where it sits
 # Run again over the same folder to update it (dist removes only what it wrote; python and llvm-mingw are kept when
 # current). x86-64 Windows 10 and later. Needs the cross toolchain built here first ($ATIV_WIN_TOOLCHAIN, default
 # ~/toolchains/ativ-win: runtime/platform/win/setup-toolchain.sh). The player's library is not part of it.
@@ -55,10 +55,48 @@ if [[ "$(cat "$OUT/python/.nativ-version" 2>/dev/null)" != "$PY_VER+$PY_REL" ]];
   rm -rf "$OUT/python"; tar xzf "$DL/$A" -C "$OUT"   # (unpacks as python/)
   echo "$PY_VER+$PY_REL" > "$OUT/python/.nativ-version"
 fi
-"$PYX" -m pip install --quiet --disable-pip-version-check --no-warn-script-location --upgrade --no-deps --only-binary=:all: \
-  --platform win_amd64 --python-version "${PY_VER%.*}" --implementation cp --target "$OUT/python/Lib/site-packages" -r "$ROOT/requirements.txt"
+# PyQt6 is split into PyQt6, PyQt6-Qt6 and PyQt6-sip; keep dependency
+# resolution enabled so a clean Windows install gets the Qt DLLs and plugins.
+# PyQt6 is split into Python bindings, Qt6 DLLs and sip. Install all three;
+# the old --no-deps form left a launcher that silently failed on Windows.
+"$PYX" -m pip install --quiet --disable-pip-version-check --no-warn-script-location --upgrade --only-binary=:all: \
+  --platform win_amd64 --python-version "${PY_VER%.*}" --implementation cp --target "$OUT/python/Lib/site-packages" -r "$ROOT/requirements-launcher.txt"
 
 # the launcher, cross-built with the developer's toolchain, at the top of the folder
-TARGET=windows ATIV_WIN_TOOLCHAIN=$WT zsh "$ROOT/launcher/build.sh" "$OUT/Project Nativ.exe"
-[[ -n ${NATIV_SIGN_CMD:-} ]] && $NATIV_SIGN_CMD "$OUT/Project Nativ.exe"
+mkdir -p "$OUT/launcher"
+cp "$ROOT/../src/launcher/pyqt_launcher.py" "$OUT/launcher/pyqt_launcher.py"
+ # Use the same JAIL artwork as the macOS app, not the Android launcher art.
+ICON="$ROOT/assets/jail/icon-macos-512.png"
+if [[ -f "$ICON" ]]; then
+  "$PYX" - "$ICON" "$OUT/launcher/jail.ico" <<'PY'
+import struct, sys
+# Keep the source PNG as a PNG-compressed ICO image. This needs no Pillow and
+# is supported by Windows Vista and later (the release target is Windows 10+).
+data = open(sys.argv[1], "rb").read()
+if data[:8] != b"\x89PNG\r\n\x1a\n": raise SystemExit("icon is not PNG")
+w, h = struct.unpack(">II", data[16:24])
+size = 0 if w >= 256 else w
+header = struct.pack("<HHH", 0, 1, 1)
+entry = struct.pack("<BBBBHHII", size, 0 if h >= 256 else h, 0, 0, 1, 32, len(data), 22)
+open(sys.argv[2], "wb").write(header + entry + data)
+PY
+  printf '1 ICON "%s"\n' "$OUT/launcher/jail.ico" > "$OUT/launcher/jail.rc"
+  "$WT/llvm-mingw/bin/x86_64-w64-mingw32-windres" "$OUT/launcher/jail.rc" -O coff -o "$OUT/launcher/jail_res.o"
+  RES="$OUT/launcher/jail_res.o"
+else
+  RES=""
+fi
+"$WT/llvm-mingw/bin/x86_64-w64-mingw32-clang++" -O2 -std=c++17 -municode -mwindows "$ROOT/launcher/pyqt_host.cpp" ${RES:+"$RES"} -o "$OUT/Tokyo Ghoul JAIL.exe"
+# The host is linked by llvm-mingw and needs these runtime DLLs next to the
+# executable on a clean Windows install (the toolchain directory is not on PATH).
+cp "$WT/llvm-mingw/x86_64-w64-mingw32/bin/libc++.dll" "$OUT/libc++.dll"
+cp "$WT/llvm-mingw/x86_64-w64-mingw32/bin/libunwind.dll" "$OUT/libunwind.dll"
+mkdir -p "$OUT/data"
+cat > "$OUT/data/README.txt" <<'EOF'
+Put the game's own files here before starting the launcher:
+  PCSG00615.pkg
+  work.bin
+  PSVUPDAT.PUP
+EOF
+[[ -n ${NATIV_SIGN_CMD:-} ]] && $NATIV_SIGN_CMD "$OUT/Tokyo Ghoul JAIL.exe"
 echo "install: $OUT ($(cat "$OUT/version.txt"); $(du -sh "$OUT" | cut -f1))"

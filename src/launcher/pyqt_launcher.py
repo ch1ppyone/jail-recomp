@@ -40,9 +40,21 @@ APP_MODE = bool(APP_RESOURCES)
 if APP_MODE:
     NATIV = Path(APP_RESOURCES).resolve()
     ROOT = NATIV
-    LIBRARY = Path.home() / "Library" / "Application Support" / "TokyoGhoulJAIL" / "JAIL"
-    DATA_DIR = LIBRARY / "data"
+    if sys.platform == "darwin":
+        LIBRARY = Path.home() / "Library" / "Application Support" / "TokyoGhoulJAIL" / "JAIL"
+    elif os.name == "nt":
+        LIBRARY = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "TokyoGhoulJAIL" / "JAIL"
+    else:
+        data_home = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+        LIBRARY = Path(data_home) / "TokyoGhoulJAIL" / "JAIL"
+    # A release may carry a ready-to-run local library beside the launcher.
+    # Prefer it over the per-user library so an extracted VM/release folder is
+    # immediately usable without selecting the game again.
+    bundled_data = NATIV / "data"
+    DATA_DIR = Path(os.environ.get("JAIL_DATA", bundled_data if bundled_data.is_dir() else LIBRARY / "data")).expanduser()
     LOG_PATH = LIBRARY / "logs" / "launcher.log"
+    # Input files may be shipped in the release's data/ directory, but all
+    # generated dumps, builds, logs and settings belong to the user's library.
     DUMP = Path(os.environ.get("ATIV_DUMP", LIBRARY / "dump")).expanduser()
     TOOLCHAIN = Path(os.environ.get("ATIV_MAC_TOOLCHAIN", NATIV / "toolchain"))
 else:
@@ -57,6 +69,16 @@ PIPELINE = NATIV / "pipeline" / "vitarecomp.py"
 GAME_DIR = DUMP / "decrypted" / TITLE
 RECOMP_DIR = GAME_DIR / "recomp"
 GAME_EXE = RECOMP_DIR / ("game_host.exe" if os.name == "nt" else "game_host")
+GAME_IMAGE = RECOMP_DIR / "game.img"
+GAME_ANALYSIS = GAME_DIR / "analysis" / "eboot.data.json"
+GAME_LOG = RECOMP_DIR / "launch.log"
+GAME_SESSION_LOG = RECOMP_DIR / "session.log"
+GAME_LAUNCH_LOG = LOG_PATH.parent / "game-launch.log"
+
+
+def build_ready() -> bool:
+    """All generated files `vitarecomp run` needs, not just the executable."""
+    return GAME_EXE.is_file() and GAME_IMAGE.is_file() and GAME_ANALYSIS.is_file()
 
 STYLE = """
 * { outline: none; }
@@ -360,6 +382,7 @@ class Launcher(QMainWindow):
         self.set_data_state("checking")
         self._loading = False
         QTimer.singleShot(0, self.refresh_data)
+        QTimer.singleShot(100, self.write_diagnostics)
 
     # ---------------------------------------------------------------- discovery
     @staticmethod
@@ -432,6 +455,17 @@ class Launcher(QMainWindow):
         self.detect_all()
         self.validity = {}
         self.valid_flags = {}
+
+        # Release/VM packages can contain a completed Windows build instead of
+        # the original PKG, licence and firmware inputs.  Treat that layout as
+        # ready-to-play: data/decrypted/<title>/recomp is the same build tree
+        # used by the normal pipeline.
+        if os.name == "nt" and build_ready():
+            self.set_data_state("ready")
+            self.update_ready_text()
+            self.refresh_build_status()
+            return
+
         problems = []
         pkg = self.inputs["pkg"]
         if pkg:
@@ -700,6 +734,11 @@ class Launcher(QMainWindow):
             self.build_rows[key] = value
         status_layout.addSpacing(10)
         status_layout.addLayout(grid)
+        self.library_label = QLabel(f"Builds and saves: {DUMP}")
+        self.library_label.setObjectName("muted")
+        self.library_label.setWordWrap(True)
+        status_layout.addSpacing(8)
+        status_layout.addWidget(self.library_label)
         actions = QHBoxLayout()
         actions.addStretch(1)
         recheck = QPushButton("RE-CHECK")
@@ -712,6 +751,25 @@ class Launcher(QMainWindow):
         open_data.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(DATA_DIR))))
         actions.addWidget(open_data)
         actions.addWidget(recheck)
+        rebuild = QPushButton("REBUILD")
+        rebuild.setObjectName("secondary")
+        rebuild.setCursor(Qt.CursorShape.PointingHandCursor)
+        rebuild.setToolTip("Delete the generated decrypted copy and native build, then prepare the game again.")
+        rebuild.clicked.connect(self.rebuild_build)
+        actions.addWidget(rebuild)
+        open_library = QPushButton("OPEN LIBRARY")
+        open_library.setObjectName("secondary")
+        open_library.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_library.setToolTip("Open the folder that holds the build, saves and settings.")
+        open_library.clicked.connect(lambda: QDesktopServices.openUrl(
+            QUrl.fromLocalFile(str(DUMP))))
+        actions.addWidget(open_library)
+        reset = QPushButton("CLEAN LIBRARY")
+        reset.setObjectName("secondary")
+        reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset.setToolTip("Delete the firmware, licences, decrypted game, saves and build. data/ is not touched.")
+        reset.clicked.connect(self.reset_library)
+        actions.addWidget(reset)
         status_layout.addSpacing(10)
         status_layout.addLayout(actions)
         status_layout.addStretch(1)
@@ -888,9 +946,12 @@ class Launcher(QMainWindow):
             "SYSTEM", "SETTINGS",
             "Diagnostics, local data and the components used by this build.")
 
-        diagnostics, diag_layout = self.card("DIAGNOSTICS", "Off by default; the game does not need a log")
+        diagnostics, diag_layout = self.card("DIAGNOSTICS", "Launch and pipeline logs are written beside the launcher's data")
         self.logging = QCheckBox("Write system log (logs/launcher.log)")
-        self.logging.setChecked(str(self.settings.value("logging", "false")).lower() in {"1", "true"})
+        # Enabled by default for the release test builds: the log is the only
+        # way to see a failure of a windowed Windows process.
+        self.logging.setChecked(True)
+        self.settings.setValue("logging", "true")
         self.logging.stateChanged.connect(self.toggle_logging)
         diag_layout.addSpacing(8)
         diag_layout.addWidget(self.logging)
@@ -900,11 +961,16 @@ class Launcher(QMainWindow):
         open_log.setObjectName("secondary")
         open_log.setCursor(Qt.CursorShape.PointingHandCursor)
         open_log.clicked.connect(self.open_log)
+        open_game_log = QPushButton("OPEN GAME LOG")
+        open_game_log.setObjectName("secondary")
+        open_game_log.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_game_log.clicked.connect(self.open_game_log)
         open_folder = QPushButton("OPEN LOG FOLDER")
         open_folder.setObjectName("secondary")
         open_folder.setCursor(Qt.CursorShape.PointingHandCursor)
         open_folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(LOG_PATH.parent))))
         row.addWidget(open_log)
+        row.addWidget(open_game_log)
         row.addWidget(open_folder)
         diag_layout.addSpacing(10)
         diag_layout.addLayout(row)
@@ -1045,7 +1111,40 @@ class Launcher(QMainWindow):
         if LOG_PATH.is_file():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(LOG_PATH)))
         else:
-            QMessageBox.information(self, "No log yet", "Enable the system log and run a build first.")
+            QMessageBox.information(self, "No log yet", "Run a build first.")
+
+    def open_game_log(self) -> None:
+        for path in (GAME_LOG, GAME_SESSION_LOG, GAME_LAUNCH_LOG):
+            if path.is_file():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+                return
+        if RECOMP_DIR.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(RECOMP_DIR)))
+        else:
+            QMessageBox.information(self, "No game log yet", "Prepare & Play first.")
+
+    def write_diagnostics(self) -> None:
+        self.append("\n# ---- launcher diagnostics ----")
+        self.append(f"time: {datetime.datetime.now().isoformat(timespec='seconds')}")
+        self.append(f"python: {sys.version.split()[0]} ({sys.executable})")
+        self.append(f"platform: {sys.platform} / {os.name}")
+        self.append(f"app resources: {NATIV}")
+        self.append(f"data: {DATA_DIR}")
+        self.append(f"library: {LIBRARY if APP_MODE else ROOT}")
+        self.append(f"dump: {DUMP}")
+        self.append(f"game: {GAME_DIR}")
+        self.append(f"host: {GAME_EXE}")
+        self.append(f"image: {GAME_IMAGE}")
+        self.append(f"analysis: {GAME_ANALYSIS}")
+        self.append(f"build ready: {build_ready()}")
+        self.append(f"game log: {GAME_LOG}")
+        self.append(f"launch log: {GAME_LAUNCH_LOG}")
+        self.append(f"launcher log: {LOG_PATH}")
+        for key in ("LOCALAPPDATA", "APPDATA", "JAIL_APP_RESOURCES", "ATIV_DUMP",
+                    "ATIV_PACKS", "RECOMP_SETTINGS_SHARED", "TARGET"):
+            self.append(f"env {key}={os.environ.get(key, '')}")
+        for key, path in self.inputs.items():
+            self.append(f"input {key}: {path if path else 'not found'}")
 
     # ---------------------------------------------------------------- data import
     def choose_file(self, key: str, filt: str) -> None:
@@ -1136,7 +1235,7 @@ class Launcher(QMainWindow):
         firmware = any((DUMP / "firmware").glob("*/version.txt")) if (DUMP / "firmware").is_dir() else False
         licence = any((DUMP / "licenses").glob("*.rif")) if (DUMP / "licenses").is_dir() else False
         game = (GAME_DIR / "elf" / "eboot.bin.elf").is_file()
-        build = GAME_EXE.is_file()
+        build = build_ready()
         for key, ready in (("firmware", firmware), ("licence", licence), ("game", game), ("build", build)):
             self.build_rows[key].setText("✓ ready" if ready else "— not yet")
             self.build_rows[key].setObjectName("ok" if ready else "muted")
@@ -1148,12 +1247,12 @@ class Launcher(QMainWindow):
             self.update_ready_text()
 
     def update_play_caption(self) -> None:
-        self.play.setText("PLAY JAIL" if GAME_EXE.is_file() else "PREPARE && PLAY")
+        self.play.setText("PLAY JAIL" if build_ready() else "PREPARE && PLAY")
 
     def update_ready_text(self) -> None:
         if self.data_state != "ready":
             return
-        if GAME_EXE.is_file():
+        if build_ready():
             self.detail_label.setText("Game data is ready. No path selection is needed — press PLAY JAIL.")
             self.update_status("Game data verified. Press PLAY JAIL.")
         else:
@@ -1164,6 +1263,48 @@ class Launcher(QMainWindow):
         self.status.setText(text)
 
     # ---------------------------------------------------------------- pipeline
+    def reset_library(self) -> None:
+        if self.process:
+            return
+        answer = QMessageBox.question(
+            self, "Clean library",
+            "Delete the whole local library?\n\n"
+            f"{DUMP}\n\n"
+            "This removes the Vita firmware, kept licences, decrypted game, saves and the native build. "
+            "Your PKG, licence and firmware in data/ are not touched.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            shutil.rmtree(DUMP)
+            self.append(f"Removed the local library: {DUMP}")
+        except OSError as exc:
+            self.append(f"Could not remove the local library: {exc}")
+            return
+        self.refresh_data()
+        self.update_status("Local library removed. Press Prepare & Play.")
+
+    def rebuild_build(self) -> None:
+        if self.process:
+            return
+        answer = QMessageBox.question(
+            self, "Rebuild",
+            "Delete the generated decrypted game and native build, then rebuild from data/?\n\n"
+            "Your PKG, licence and firmware in data/ are not touched.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            shutil.rmtree(GAME_DIR)
+            self.append(f"Removed the local build: {GAME_DIR}")
+        except OSError as exc:
+            self.append(f"Could not remove the local build: {exc}")
+            return
+        self.refresh_data()
+        self.play_clicked()
+
     def play_clicked(self) -> None:
         if self.process:
             return
@@ -1176,20 +1317,32 @@ class Launcher(QMainWindow):
         self.stages = []
         pkg, licence, pup = (self.inputs["pkg"], self.inputs["licence"], self.inputs["firmware"])
         assert pkg and licence and pup
+        self.append("\n# ---- prepare & play ----")
+        self.append(f"pkg: {pkg}")
+        self.append(f"licence: {licence}")
+        self.append(f"firmware: {pup}")
+        self.append(f"dump: {DUMP}")
+        self.append(f"build ready before: {build_ready()}")
         firmware_ready = (DUMP / "firmware").is_dir() and any((DUMP / "firmware").glob("*/version.txt"))
         if not firmware_ready:
             self.stages.append(("Vita firmware", ["firmware", str(pup)], False))
         self.stages.append(("Licence", ["licenses", "import", str(licence)], False))
-        first_build = not (GAME_DIR / "elf" / "eboot.bin.elf").is_file()
+        first_build = not build_ready()
         if first_build:
             self.stages.append(("Decrypt & build", ["add", str(pkg), "--license", str(licence)], False))
-        else:
-            self.stages.append(("Update build", ["ready", TITLE], False))
+        # An existing host is already a playable local build. Do not run
+        # `ready` on every click: packaged Windows releases can carry a
+        # version stamp that differs after extraction or a tool update, and
+        # that turns PLAY into an endless "Update build" loop. Rebuilding is
+        # intentionally tied to the absence of the local build; remove the
+        # user's generated dump/build to prepare it again.
         self.stage = 0
         self.stage_fraction = 0.0
         self.progress.setValue(0)
         self.progress.show()
         self.append("Starting the local pipeline.")
+        for name, args, _optional in self.stages:
+            self.append(f"stage: {name} {args}")
         self.show_page(0)
         self.run_next()
 
@@ -1203,7 +1356,9 @@ class Launcher(QMainWindow):
         env.insert("ATIV_PACKS", str(NATIV / "packs"))
         env.insert("ATIV_MAC_TOOLCHAIN", str(TOOLCHAIN))
         env.insert("RECOMP_SETTINGS_SHARED", str(shared_settings_path()))
+        env.insert("RECOMP_LOG", "1")
         env.insert("PYTHONUNBUFFERED", "1")
+        env.insert("PYTHONFAULTHANDLER", "1")
         return env
 
     def run_next(self) -> None:
@@ -1258,7 +1413,14 @@ class Launcher(QMainWindow):
             name, _args, optional = self.stages[self.stage]
             if not optional:
                 self.process = None
-                self.finish_pipeline(False, f"The stage '{name}' failed with exit code {code}.")
+                if code == 62097:
+                    self.finish_pipeline(
+                        False,
+                        "The build was interrupted (exit code 62097). The launcher was closed or the "
+                        "process was terminated while compiling. Keep the launcher open during the build "
+                        "and run Prepare & Play again.")
+                else:
+                    self.finish_pipeline(False, f"The stage '{name}' failed with exit code {code}.")
                 return
             self.append(f"Warning: the optional stage '{name}' failed; continuing.")
         self.stage += 1
@@ -1295,34 +1457,57 @@ class Launcher(QMainWindow):
             QTimer.singleShot(150, self.launch_game)
 
     def stop_pipeline(self) -> None:
+        if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+            answer = QMessageBox.question(
+                self, "Stop build",
+                "Stop the running build?\n\nThe next Prepare & Play starts it again from the beginning.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
         self.cancelled = True
         if self.process:
+            self.append("Stopping the pipeline at the user's request.")
             self.process.kill()
         else:
             self.finish_pipeline(False, "Stopped by user.")
 
     def launch_game(self) -> None:
-        if not GAME_EXE.is_file():
+        if not build_ready():
             self.update_status("Native build not found. Prepare & Play again.")
             return
-        env_keys = {"ATIV_DUMP": str(DUMP), "ATIV_PACKS": str(NATIV / "packs"),
+        env = os.environ.copy()
+        env.update({"ATIV_DUMP": str(DUMP), "ATIV_PACKS": str(NATIV / "packs"),
                     "ATIV_MAC_TOOLCHAIN": str(TOOLCHAIN),
-                    "RECOMP_SETTINGS_SHARED": str(shared_settings_path())}
-        previous = {key: os.environ.get(key) for key in env_keys}
-        os.environ.update(env_keys)
+                    "RECOMP_SETTINGS_SHARED": str(shared_settings_path()),
+                    "RECOMP_LOG": "1", "PYTHONFAULTHANDLER": "1",
+                    "PYTHONUNBUFFERED": "1"})
+        command = [sys.executable, str(PIPELINE), "run", TITLE]
+        self.append("\n# ---- game launch ----")
+        self.append(f"command: {command}")
+        self.append(f"cwd: {NATIV}")
+        self.append(f"ATIV_DUMP: {DUMP}")
+        self.append(f"log: {GAME_LAUNCH_LOG}")
         try:
-            started, _pid = QProcess.startDetached(
-                sys.executable, [str(PIPELINE), "run", TITLE], str(NATIV))
-        finally:
-            for key, value in previous.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
-        if not started:
-            self.update_status("The game could not be started.")
+            GAME_LAUNCH_LOG.parent.mkdir(parents=True, exist_ok=True)
+            detached = {}
+            if os.name == "nt":
+                detached["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                detached["start_new_session"] = True
+            with GAME_LAUNCH_LOG.open("ab") as output:
+                output.write((f"\n===== game launch {datetime.datetime.now().isoformat(timespec='seconds')} =====\n"
+                              f"command: {command}\ncwd: {NATIV}\nATIV_DUMP: {DUMP}\n").encode("utf-8"))
+                output.flush()
+                process = subprocess.Popen(
+                    command, cwd=str(NATIV), env=env,
+                    stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
+                    close_fds=True, **detached)
+        except OSError as exc:
+            self.append(f"Game launch failed: {exc}")
+            self.update_status("Game launch failed. See logs.")
             return
-        self.append("Game launched.")
+        self.append(f"Game launched, pid {process.pid}.")
         self.update_status("Game launched. Close its window when you are done.")
         self.play.setEnabled(False)
         self.play.setText("GAME RUNNING")
@@ -1357,6 +1542,17 @@ class Launcher(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+            answer = QMessageBox.question(
+                self, "Build running",
+                "A build is still running. Quit and stop it?\n\n"
+                "A native build takes several minutes on a VM. Keeping the launcher open lets it finish.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self.cancelled = True
+            self.append("Launcher closed during a build: stopping the pipeline.")
             self.process.kill()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.sync()

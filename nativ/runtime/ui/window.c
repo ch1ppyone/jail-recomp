@@ -747,6 +747,9 @@ void audio_output(int dev, const void *buf, uint32_t bytes) {
 /* the GPU backend's frame: blitted (on the game thread) into one of three RGBA8 textures here, the
  * present loop shows the latest; three so the one being written is never the one being shown */
 static SDL_GPUTexture *gtex[3]; static uint32_t gtw[3], gth[3]; static int gidx = -1, gshow = -1, gnew;
+/* No SDL_GPU device (a VM without D3D12/Vulkan, a remote desktop): the game still renders on the
+ * software path, so present its CPU frame through SDL's software renderer. */
+static SDL_Renderer *cpu_renderer; static SDL_Texture *cpu_texture; static uint32_t cpu_w, cpu_h;
 static uint32_t gtl[3];   /* each one's mip levels (window_present_gpu: more than one when it is over twice the window's size) */
 void window_pixel_size(uint32_t *w, uint32_t *h) { *w = win_pw; *h = win_ph; }
 static uint64_t gready_us[3];   /* when each was handed over (the game's flip, as the GPU backend presents it): RECOMP_LATENCY_LOG */
@@ -1137,7 +1140,9 @@ void window_run(void *(*fn)(void *), void *arg) {
 		SDL_Surface *icon = ip ? SDL_LoadPNG(ip) : NULL; if (icon) { SDL_SetWindowIcon(win, icon); SDL_DestroySurface(icon); }
 	}
 	SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-	{ extern void *gfx_gpu_create_device(void); gpu = gfx_gpu_create_device(); }
+	{ extern void *gfx_gpu_create_device(void);
+	  if (getenv("RECOMP_NO_GPU") && *getenv("RECOMP_NO_GPU") != '0') fprintf(stderr, "    window: GPU disabled by RECOMP_NO_GPU; using the software renderer\n");
+	  else gpu = gfx_gpu_create_device(); }
 	if (gpu) SDL_ClaimWindowForGPUDevice(gpu, win);
 	if (gpu) {
 		/* the swapchain's present mode. On Vulkan, mailbox where the display has it: with vsync (fifo) this loop's submit
@@ -1190,9 +1195,28 @@ void window_run(void *(*fn)(void *), void *arg) {
 			 * into SDL (audio_output, window_present) or guest code; tearing down SDL subsystems
 			 * out from under it raced into a SIGSEGV at a null host function pointer. The OS
 			 * reclaims everything on process exit; skip the unsafe graceful-shutdown step. */
-			/* (a close request asks first: the quit card, overlay.cpp; a second one while it's up quits) */
-			if (e.type == SDL_EVENT_QUIT && !overlay_quit_confirm()) { extern void host_summary(const char *why); extern void gfx_gpu_quit(void); host_summary("window closed"); gfx_gpu_quit(); _exit(0); }   /* the import histogram and the stubbed-import list land in the log */
-			if (e.type == SDL_EVENT_QUIT) { buttons = 0; touch_down = 0; gamepad_touch_release(); continue; }
+			/* SDL3 reports a title-bar X as WINDOW_CLOSE_REQUESTED on some
+			 * backends and as QUIT on others. Treat both identically; previously
+			 * the former was ignored, leaving game_host alive with no usable close
+			 * action on Windows. The first request shows the in-game quit card;
+			 * another request while it is open exits immediately. */
+			int close_requested = e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+			if (close_requested && !overlay_quit_confirm()) { extern void host_summary(const char *why); extern void gfx_gpu_quit(void); host_summary("window closed"); gfx_gpu_quit(); _exit(0); }   /* the import histogram and the stubbed-import list land in the log */
+			if (close_requested) { buttons = 0; touch_down = 0; gamepad_touch_release(); continue; }
+			/* SDL relative mouse mode confines the pointer while keyboard/mouse
+			 * play is active.  Release it immediately when another application or
+			 * the desktop takes focus; relying only on the Alt escape gesture made
+			 * a normal window switch look like the whole system was locked. */
+			if (e.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+				if (win && SDL_GetWindowRelativeMouseMode(win)) SDL_SetWindowRelativeMouseMode(win, false);
+				rel_on = 0;
+				kbm_lmb = kbm_rmb = 0;
+				buttons &= ~(RTRIG | LTRIG);
+				if (gesture_drag) { gesture_drag = 0; touch_down = 0; }
+				if (twist_drag) { twist_drag = 0; twist_down = 0; }
+				__atomic_store_n(&mouse_dx_q8, 0, __ATOMIC_RELAXED);
+				__atomic_store_n(&mouse_dy_q8, 0, __ATOMIC_RELAXED);
+			}
 			/* fullscreen however it was entered or left -- the window's own button (macOS's green one), the OS's
 			 * shortcut, the menu -- is the setting: the next game starts the same way */
 			if ((e.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN || e.type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN) && settings_int("fullscreen", 0) != (e.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)) {
@@ -1602,7 +1626,40 @@ void window_run(void *(*fn)(void *), void *arg) {
 		if (overlay_wants_capture()) { extern void gfxcap_request(void); gfxcap_request(); fprintf(stderr, "capture requested (overlay)\n"); }
 
 
-		if (!gpu) { SDL_Delay(1); continue; }
+		if (!gpu) {
+			/* SDL_GPU has no backend here. The software renderer is the presentation path: upload
+			 * the frame window_present copied and show it; without this the game ran but the window
+			 * stayed empty ("presenting nothing"). */
+			if (!cpu_renderer) {
+				cpu_renderer = SDL_CreateRenderer(win, "software");
+				if (cpu_renderer) {
+					SDL_SetRenderVSync(cpu_renderer, 1);
+					fprintf(stderr, "    window: no GPU device; presenting with the SDL software renderer\n");
+				} else fprintf(stderr, "    window: software renderer failed: %s\n", SDL_GetError());
+			}
+			if (!cpu_renderer) { SDL_Delay(1); continue; }
+			pthread_mutex_lock(&lock);
+			int have = new_frame;
+			uint32_t pw = fw, ph = fh;
+			if (have && (!cpu_texture || cpu_w != pw || cpu_h != ph)) {
+				if (cpu_texture) SDL_DestroyTexture(cpu_texture);
+				cpu_texture = SDL_CreateTexture(cpu_renderer, SDL_PIXELFORMAT_RGBA32,
+				                                SDL_TEXTUREACCESS_STREAMING, (int)pw, (int)ph);
+				cpu_w = pw; cpu_h = ph;
+			}
+			if (have && cpu_texture) {
+				SDL_UpdateTexture(cpu_texture, NULL, frame, (int)(4 * pw));
+				new_frame = 0;
+			}
+			pthread_mutex_unlock(&lock);
+			if (have && cpu_texture) {
+				SDL_SetRenderDrawColor(cpu_renderer, 0, 0, 0, 255);
+				SDL_RenderClear(cpu_renderer);
+				SDL_RenderTexture(cpu_renderer, cpu_texture, NULL, NULL);
+				SDL_RenderPresent(cpu_renderer);
+			} else SDL_Delay(1);
+			continue;
+		}
 		if (overlay_game_paused()) { extern void gfx_shader_prep_tick(void); gfx_shader_prep_tick(); }   /* (a paused game doesn't present: the shader warm-up steps on from here, its prep card's too) */
 		if (self_paced) {   /* no vsync wait paces this loop: a present once the game has a new frame, else once a refresh (menus, the overlay); spinning presented ~1200 times a second and slowed the game */
 			const SDL_DisplayMode *dm = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(win));
