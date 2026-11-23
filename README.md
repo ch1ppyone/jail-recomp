@@ -12,7 +12,7 @@ x86-64, with an Android arm64 port. Linux support is planned.**
 ![Title: PCSG00615](https://img.shields.io/badge/title-PCSG00615_%C2%B7_1.00-252529?style=flat-square)
 ![Game data: not included](https://img.shields.io/badge/game_data-not_included-252529?style=flat-square)
 
-[Platforms](#platforms) · [Screenshots](#screenshots) · [Desktop releases](#desktop-releases) · [macOS](#macos) · [Android](#android) · [How it works](#how-it-works) · [FAQ](#faq)
+[Platforms](#platforms) · [Screenshots](#screenshots) · [Desktop releases](#desktop-releases) · [macOS](#macos) · [Windows](#windows) · [Android](#android) · [How it works](#how-it-works) · [FAQ](#faq)
 
 </div>
 
@@ -247,6 +247,79 @@ cd nativ
 
 </details>
 
+## Windows
+
+### Requirements
+
+- Windows 10 or newer, x86-64;
+- a D3D12- or Vulkan-capable GPU and current graphics drivers;
+- approximately 5 GB of free space for the decrypted game and native build;
+- your own Japanese 1.00 `PCSG00615.pkg`, matching `work.bin` licence and
+  `PSVUPDAT.PUP` firmware.
+
+The Windows release is self-contained. It includes the native launcher,
+bundled Python and PyQt6/Qt6, SDL3, the required LLVM C++ runtime DLLs and the
+JAIL icon. No Python, compiler or separate runtime installation is needed on
+the player's PC.
+
+### Install and play
+
+1. Download `JAIL-v0.1.3-windows.zip` from the GitHub release.
+2. Extract the complete `TokyoGhoulJAIL` folder. Avoid running it directly
+   from a browser download or a partially extracted archive.
+3. Put your own files in the folder's `data/` directory:
+
+   ```text
+   TokyoGhoulJAIL/
+   ├── Tokyo Ghoul JAIL.exe
+   └── data/
+       ├── PCSG00615.pkg
+       ├── work.bin
+       └── PSVUPDAT.PUP
+   ```
+
+4. Start **Tokyo Ghoul JAIL.exe** and press **PREPARE & PLAY**. The first run
+   validates the files, decrypts the PKG, analyses the executable, recompiles
+   the ARMv7 code and builds the native Windows game.
+5. After preparation finishes, use **PLAY JAIL** for subsequent launches.
+
+The launcher writes generated builds, saves, settings and logs outside the
+release folder:
+
+```text
+%LOCALAPPDATA%\TokyoGhoulJAIL\JAIL
+```
+
+If the files are elsewhere, use **Game Data → Browse**. The launcher checks
+the content ID, matching licence and firmware before starting preparation.
+
+### Windows verification
+
+The Windows build was tested on a physical **ASUS ROG Xbox Ally X** and the
+game was completed from the first launch through the end of the story. Menus,
+story scenes, audio, gamepad controls, saves and native rendering work.
+
+### Graphics and troubleshooting
+
+On supported hardware SDL uses D3D12 or Vulkan. If the log contains:
+
+```text
+window: no GPU device; presenting with the SDL software renderer
+```
+
+the game can still run, but rendering may be very slow. This is expected in
+some virtual machines. Enable the VM's 3D acceleration and install its guest
+tools, or update the real PC's GPU drivers. Set `RECOMP_NO_GPU=1` only when
+you deliberately want to diagnose the software-renderer path.
+
+Windows diagnostics are stored in:
+
+```text
+%LOCALAPPDATA%\TokyoGhoulJAIL\JAIL\logs\host.log
+%LOCALAPPDATA%\TokyoGhoulJAIL\JAIL\logs\host-console.log
+%LOCALAPPDATA%\TokyoGhoulJAIL\JAIL\logs\launcher.log
+```
+
 ## Android
 
 The Android APK is built on a Mac (or Linux) from the same sources. The
@@ -396,19 +469,22 @@ A Bluetooth or USB gamepad works out of the box.
 ## How it works
 
 <p align="center">
-  <img src="docs/images/how-it-works.svg" alt="How it works: your files are checked and prepared, the game's ARMv7 code is recompiled to C, and the shared game code and runtime are built for macOS and Android" width="100%">
+  <img src="docs/images/how-it-works.svg" alt="How it works: the shared desktop launcher prepares user-owned Vita files, builds the native game locally, and runs the shared runtime on macOS, Windows or Android" width="100%">
 </p>
 
-1. **Your files** — the PKG, licence and firmware stay on your machine.
-2. **Prepare** — the package is decrypted (by the macOS launcher during setup,
-   or by the Android app on first launch) and the Vita system libraries are
-   rebuilt from your firmware.
-3. **Recompile** — the game's ARMv7 code is analysed and translated to C, one
-   function at a time.
-4. **Build** — the generated C is compiled together with a Vita-compatible
-   runtime that provides graphics, audio, input, files, saves and timing.
-5. **Play** — the result is a native macOS app or Android APK. There is no
-   emulator and no JIT at runtime.
+1. **Your files** — the release contains the launcher and tools only. Your
+   `PCSG00615.pkg`, `work.bin` and `PSVUPDAT.PUP` stay in the local `data/`
+   folder and are never uploaded.
+2. **Desktop launcher** — the shared PyQt6 launcher validates the content ID,
+   licence and firmware, then keeps generated builds, saves, settings and logs
+   in the platform user-data library outside the release folder.
+3. **Prepare** — the PKG is decrypted, the firmware is imported and the Vita
+   system libraries are rebuilt locally.
+4. **Recompile and build** — the game's ARMv7 code is analysed and translated
+   to C, then compiled with the Vita-compatible runtime for the selected host.
+5. **Play** — **PLAY JAIL** starts the native macOS or Windows executable. The
+   Android app uses its own first-launch installer and APK runtime. There is no
+   emulator and no JIT at runtime; Linux support is planned.
 
 The original game assets are read from your decrypted copy; nothing from the
 game is stored in this repository.
